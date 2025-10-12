@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { sendMessage, getChatHistory, getUserById } from '../utils/api';
+import { getChatHistory, getUserById } from '../utils/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,7 +24,6 @@ const Chat = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [friend, setFriend] = useState<User | null>(null);
   const socket = useSocket();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -56,8 +55,7 @@ const Chat = () => {
     if (friendId && user) {
       // Join the chat room
       if (socket) {
-        const chatId = [user._id, friendId].sort().join('-');
-        socket.emit('join_chat', { chatId });
+        socket.emit('join_chat', { chatId: [user._id, friendId].sort().join('-') });
       }
       
       // Load chat history when component mounts
@@ -67,7 +65,6 @@ const Chat = () => {
     return () => {
       // Leave the chat room when component unmounts
       if (socket && friendId && user) {
-        const chatId = [user._id, friendId].sort().join('-');
         // Note: Socket.IO doesn't have a built-in leave event, but rooms are automatically left on disconnect
       }
     };

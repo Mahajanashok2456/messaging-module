@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getUserRequests, getUserFriends, getUserChats, searchUsers, sendFriendRequest, acceptUserFriendRequest, rejectUserFriendRequest } from '../utils/api';

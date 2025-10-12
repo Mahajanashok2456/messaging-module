@@ -1,13 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-
-interface MessageNotification {
-  senderId: string;
-  senderName: string;
-  content: string;
-  timestamp: Date;
-}
 
 const SocketContext = createContext<Socket | null>(null);
 

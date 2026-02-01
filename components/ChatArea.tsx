@@ -387,9 +387,9 @@ export default function ChatArea({
         // Wait briefly for connection if socket exists but not connected yet
         if (!socket.connected) {
           console.log("⏳ Socket not connected yet, waiting briefly...");
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        
+
         if (socket.connected) {
           socketEmitted = true;
           console.log("🚀 Emitting message via socket INSTANTLY (no wait):", {

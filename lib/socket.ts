@@ -52,7 +52,7 @@ export const getSocket = (): Socket | null => {
       socket.on("connect", () => {
         console.log("✅ Socket connected:", socket?.id);
         isInitializing = false;
-        
+
         // Auto-join user room on connect/reconnect
         const userData = localStorage.getItem("user");
         if (userData) {

@@ -37,6 +37,7 @@ export default function ChatArea({
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -132,10 +133,15 @@ export default function ChatArea({
 
           // Emit read receipt via socket
           const socket = getSocket();
-          if (socket) {
+          if (socket && chatId) {
             socket.emit("mark_read", {
               messageIds: unreadMessages.map((m) => m._id),
               readBy: currentUser._id,
+            });
+            
+            // Emit messages_read event to update unread count in Sidebar
+            socket.emit("messages_read", {
+              chatId: chatId,
             });
           }
         } catch (error) {
@@ -234,7 +240,7 @@ export default function ChatArea({
       const { userId, isTyping: typing } = data;
       if (userId === selectedFriend.id) {
         setIsTyping(typing);
-        
+
         // Auto-hide typing indicator after 3 seconds
         if (typing) {
           if (typingTimeoutRef.current) {
@@ -253,7 +259,7 @@ export default function ChatArea({
       socket.off("receive_message", handleReceiveMessage);
       socket.off("messages_read", handleMessagesRead);
       socket.off("user_typing", handleTypingIndicator);
-      
+
       // Clear typing timeout on cleanup
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -285,9 +291,12 @@ export default function ChatArea({
   const joinChat = async () => {
     // Create or get chat session
     try {
-      await api.post("chats/get-or-create", {
+      const response = await api.post("chats/get-or-create", {
         otherUserId: selectedFriend.id,
       });
+      if (response.data && response.data.chatId) {
+        setChatId(response.data.chatId);
+      }
     } catch (e) {
       console.error("Error ensuring chat exists", e);
     }
@@ -582,9 +591,18 @@ export default function ChatArea({
           <div className="flex justify-start mb-2">
             <div className="bg-white px-4 py-2 rounded-lg shadow-md">
               <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                <div
+                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                ></div>
               </div>
             </div>
           </div>

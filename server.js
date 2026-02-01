@@ -47,13 +47,27 @@ app.prepare().then(() => {
     socket.on("send_message", async (data) => {
       console.log("Message received via socket:", data);
 
+      // Fetch sender info from database
+      let senderName = "Someone";
+      try {
+        const User = require("./lib/db/User");
+        const sender = await User.findById(data.senderId).select("username");
+        if (sender) {
+          senderName = sender.username;
+        }
+      } catch (err) {
+        console.error("Error fetching sender info:", err);
+      }
+
       // Emit to recipient for real-time delivery
       const recipientRoom = normalizeUserRoom(data.recipientId);
       io.to(recipientRoom).emit("receive_message", {
         messageId: data.messageId,
         _id: data.messageId,
         senderId: data.senderId,
+        senderName: senderName,
         recipientId: data.recipientId,
+        chatId: data.chatId,
         content: data.content,
         timestamp: data.timestamp,
         status: "delivered",

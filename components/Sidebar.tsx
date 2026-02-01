@@ -37,6 +37,7 @@ interface Chat {
   }[];
   lastMessage?: string;
   updatedAt: string;
+  unreadCount?: number;
 }
 
 interface FriendRequest {
@@ -91,12 +92,17 @@ export default function Sidebar({
     fetchChats();
     fetchFriends();
     fetchRequests();
+    
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, []);
 
   // Socket Listener for real-time updates (separate effect to get latest fetchChats)
   useEffect(() => {
     const socket = getSocket();
-    if (!socket) return;
+    if (!socket || !currentUser) return;
 
     let debounceTimer: NodeJS.Timeout | null = null;
 
@@ -107,24 +113,80 @@ export default function Sidebar({
       }, 300);
     };
 
-    const handleReceiveMessage = () => {
-      // When a new message arrives, refresh chats to update order and last message
-      debouncedFetchChats();
+    const handleReceiveMessage = (data: any) => {
+      console.log("📩 Received message in Sidebar:", data);
+      
+      // Update unread count locally
+      setChats((prevChats) => {
+        return prevChats.map((chat) => {
+          if (chat._id === data.chatId) {
+            // Only increment if not currently viewing this chat
+            const isViewingChat = selectedFriendId === data.senderId;
+            return {
+              ...chat,
+              unreadCount: isViewingChat ? (chat.unreadCount || 0) : (chat.unreadCount || 0) + 1,
+              lastMessage: data.content,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return chat;
+        }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      });
+
+      // Show browser notification if not viewing the chat
+      if (selectedFriendId !== data.senderId && 'Notification' in window && Notification.permission === 'granted') {
+        const senderName = data.senderName || 'Someone';
+        const notification = new Notification(`${senderName}`, {
+          body: data.content,
+          icon: '/icon.png', // Add your app icon
+          badge: '/badge.png',
+          tag: data.chatId, // Prevent duplicate notifications
+          requireInteraction: false,
+        });
+
+        // Auto-close notification after 5 seconds
+        setTimeout(() => notification.close(), 5000);
+
+        // Click to open chat
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
     };
 
     const handleMessageSent = () => {
       debouncedFetchChats();
     };
 
+    const handleMessageRead = (data: { chatId: string }) => {
+      console.log("✅ Messages marked as read:", data);
+      
+      // Reset unread count for this chat
+      setChats((prevChats) => {
+        return prevChats.map((chat) => {
+          if (chat._id === data.chatId) {
+            return {
+              ...chat,
+              unreadCount: 0,
+            };
+          }
+          return chat;
+        });
+      });
+    };
+
     socket.on("receive_message", handleReceiveMessage);
     socket.on("message_sent", handleMessageSent);
+    socket.on("messages_read", handleMessageRead);
 
     return () => {
       socket.off("receive_message", handleReceiveMessage);
       socket.off("message_sent", handleMessageSent);
+      socket.off("messages_read", handleMessageRead);
       if (debounceTimer) clearTimeout(debounceTimer);
     };
-  }, []);
+  }, [currentUser, selectedFriendId]);
 
   // Debounce Search
   useEffect(() => {
@@ -404,13 +466,20 @@ export default function Sidebar({
                           <p className="text-sm md:text-base font-medium text-gray-900 truncate">
                             {otherUser.username}
                           </p>
-                          {chat.updatedAt && (
-                            <span className="text-xs text-gray-500 ml-2">
-                              {new Date(chat.updatedAt).toLocaleDateString()}
-                            </span>
-                          )}
+                          <div className="flex items-center space-x-2">
+                            {chat.updatedAt && (
+                              <span className="text-xs text-gray-500">
+                                {new Date(chat.updatedAt).toLocaleDateString()}
+                              </span>
+                            )}
+                            {chat.unreadCount && chat.unreadCount > 0 && (
+                              <span className="bg-[#25D366] text-white text-xs font-semibold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                                {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-xs md:text-sm text-gray-500 truncate mt-0.5">
+                        <p className={`text-xs md:text-sm truncate mt-0.5 ${chat.unreadCount && chat.unreadCount > 0 ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                           {chat.lastMessage || "Start chatting!"}
                         </p>
                       </div>

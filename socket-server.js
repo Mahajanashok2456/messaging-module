@@ -86,7 +86,7 @@ io.on("connection", (socket) => {
   // Handle sending messages
   socket.on("send_message", async (data, callback) => {
     try {
-      const { messageId, senderId, recipientId, content, timestamp } = data;
+      const { messageId, chatId, senderId, recipientId, content, timestamp } = data;
 
       // Validate required fields
       if (!messageId || !senderId || !recipientId || !content) {
@@ -108,14 +108,28 @@ io.on("connection", (socket) => {
         timestamp,
       });
 
+      // Fetch sender info from database
+      let senderName = "Someone";
+      try {
+        const User = require("./lib/db/User");
+        const sender = await User.findById(senderId).select("username");
+        if (sender) {
+          senderName = sender.username;
+        }
+      } catch (err) {
+        console.error("Error fetching sender info:", err);
+      }
+
       const messageTimestamp = timestamp || new Date().toISOString();
       const messagePayload = {
         _id: messageId,
         messageId: messageId,
         senderId,
         sender: senderId,
+        senderName: senderName,
         recipientId,
         recipient: recipientId,
+        chatId,
         content,
         timestamp: messageTimestamp,
         status: "delivered",
@@ -175,14 +189,16 @@ io.on("connection", (socket) => {
     try {
       const { userId, recipientId, isTyping } = data;
       const recipientRoom = normalizeUserRoom(recipientId);
-      
+
       // Broadcast typing status to recipient
       io.to(recipientRoom).emit("user_typing", {
         userId,
         isTyping,
       });
 
-      console.log(`User ${userId} typing status: ${isTyping} to ${recipientRoom}`);
+      console.log(
+        `User ${userId} typing status: ${isTyping} to ${recipientRoom}`,
+      );
     } catch (error) {
       console.error("Error handling typing indicator:", error);
     }

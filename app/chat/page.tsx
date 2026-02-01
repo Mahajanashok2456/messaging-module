@@ -50,17 +50,19 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen bg-white overflow-hidden flex-col md:flex-row">
       {/* Sidebar - Hidden on mobile when chat is selected */}
-      <div className={`${selectedFriend ? 'hidden' : 'w-full'} md:w-80 md:block h-auto md:h-full border-b md:border-b-0 md:border-r`}>
+      <div
+        className={`${selectedFriend ? "hidden" : "w-full"} md:w-80 md:block h-auto md:h-full border-b md:border-b-0 md:border-r`}
+      >
         <Sidebar
           onSelectFriend={setSelectedFriend}
           selectedFriendId={selectedFriend?.id}
         />
       </div>
-      
+
       {/* Chat Area - Full screen on mobile, flex-1 on desktop */}
       {selectedFriend ? (
-        <ChatArea 
-          selectedFriend={selectedFriend} 
+        <ChatArea
+          selectedFriend={selectedFriend}
           currentUser={user}
           onBack={() => setSelectedFriend(null)}
         />

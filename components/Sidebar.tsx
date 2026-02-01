@@ -343,7 +343,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Content Area */}
+      {/* Content Area - Scrollable */}
       <div className="flex-1 overflow-y-auto bg-white">
         {/* VIEW: CHATS */}
         {view === "chats" && (
@@ -597,11 +597,11 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Footer / User Profile - WhatsApp style */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
+      {/* Footer / User Profile - Fixed at Bottom */}
+      <div className="flex-shrink-0 p-3 md:p-4 border-t border-gray-200 bg-white shadow-lg">
         {currentUser ? (
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-full bg-[#008069] flex items-center justify-center text-white font-semibold text-lg shadow-sm">
+            <div className="w-10 md:w-12 h-10 md:h-12 rounded-full bg-[#008069] flex items-center justify-center text-white font-semibold text-base md:text-lg flex-shrink-0 shadow-sm">
               {currentUser.username.charAt(0).toUpperCase()}
             </div>
 
@@ -628,7 +628,7 @@ export default function Sidebar({
               </div>
             ) : (
               <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold text-gray-900 truncate flex items-center">
+                <p className="text-sm md:text-base font-semibold text-gray-900 truncate flex items-center">
                   {currentUser.username}
                   <button
                     onClick={() => setIsEditingProfile(true)}
@@ -637,12 +637,12 @@ export default function Sidebar({
                     <Edit2 size={14} />
                   </button>
                 </p>
-                <p className="text-sm text-[#25D366] truncate">● Online</p>
+                <p className="text-xs md:text-sm text-[#25D366] truncate">● Online</p>
               </div>
             )}
           </div>
         ) : (
-          <div className="text-center text-gray-400 text-sm">
+          <div className="text-center text-gray-400 text-xs md:text-sm">
             Loading profile...
           </div>
         )}

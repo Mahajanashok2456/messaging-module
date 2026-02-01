@@ -230,7 +230,7 @@ export default function ChatArea({
             <ArrowLeft size={20} className="text-gray-700" />
           </button>
         )}
-        
+
         <div className="w-8 md:w-10 h-8 md:h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold mr-2 md:mr-3 flex-shrink-0">
           {selectedFriend.username.charAt(0).toUpperCase()}
         </div>

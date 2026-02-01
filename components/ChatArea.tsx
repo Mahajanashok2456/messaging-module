@@ -46,12 +46,12 @@ export default function ChatArea({
             `messages/history/${selectedFriend.id}`,
           );
           const newMessages = response.data.messages || response.data || [];
-          
+
           // Only update if there are new messages
           setMessages((prev) => {
             const prevIds = new Set(prev.map((m) => m._id));
             const hasNew = newMessages.some((m: any) => !prevIds.has(m._id));
-            
+
             if (hasNew) {
               console.log("Syncing messages from other devices...");
               return newMessages;
@@ -121,9 +121,7 @@ export default function ChatArea({
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      const response = await api.get(
-        `messages/history/${selectedFriend.id}`,
-      );
+      const response = await api.get(`messages/history/${selectedFriend.id}`);
       setMessages(response.data.messages || response.data || []);
       scrollToBottom();
     } catch (error) {
@@ -311,7 +309,7 @@ export default function ChatArea({
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           placeholder="Type a message"
-          className="flex-1 bg-white border border-gray-300 rounded-full px-3 md:px-4 py-2 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
+          className="flex-1 bg-white border border-gray-300 rounded-full px-3 md:px-4 py-2 text-xs md:text-sm text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
         />
         <button
           type="submit"

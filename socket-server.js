@@ -153,7 +153,9 @@ io.on("connection", (socket) => {
         isRead: false,
       });
 
-      console.log(`Message ${messageId} sent to user:${recipientId} and sender's other devices`);
+      console.log(
+        `Message ${messageId} sent to user:${recipientId} and sender's other devices`,
+      );
     } catch (error) {
       console.error("Error handling message:", error);
       socket.emit("message_error", { error: error.message });

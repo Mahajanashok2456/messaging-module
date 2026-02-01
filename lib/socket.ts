@@ -16,8 +16,13 @@ let isInitializing = false;
 export const getSocket = (): Socket | null => {
   if (typeof window === "undefined") return null;
 
-  // Return existing socket if it's already connected or connecting
-  if (socket && (socket.connected || socket.connecting)) {
+  // Return existing socket if it's already connected
+  if (socket && socket.connected) {
+    return socket;
+  }
+
+  // Return existing socket even if initializing (let it finish connecting)
+  if (socket && isInitializing) {
     return socket;
   }
 
@@ -47,6 +52,18 @@ export const getSocket = (): Socket | null => {
       socket.on("connect", () => {
         console.log("✅ Socket connected:", socket?.id);
         isInitializing = false;
+        
+        // Auto-join user room on connect/reconnect
+        const userData = localStorage.getItem("user");
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            socket?.emit("join_user_room", user._id);
+            console.log("🔄 Auto-joined user room:", user._id);
+          } catch (e) {
+            console.error("Failed to parse user data", e);
+          }
+        }
       });
 
       socket.on("disconnect", (reason) => {

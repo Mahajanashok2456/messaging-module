@@ -37,7 +37,7 @@ export async function GET(req) {
           ...chat.toObject(),
           unreadCount,
         };
-      })
+      }),
     );
 
     return NextResponse.json(chatsWithUnreadCount, { status: 200 });

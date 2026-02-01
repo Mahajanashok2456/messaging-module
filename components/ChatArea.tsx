@@ -138,7 +138,7 @@ export default function ChatArea({
               messageIds: unreadMessages.map((m) => m._id),
               readBy: currentUser._id,
             });
-            
+
             // Emit messages_read event to update unread count in Sidebar
             socket.emit("messages_read", {
               chatId: chatId,
@@ -383,32 +383,48 @@ export default function ChatArea({
       const socket = getSocket();
       let socketEmitted = false;
 
-      if (socket && socket.connected) {
-        socketEmitted = true;
-        console.log("🚀 Emitting message via socket INSTANTLY (no wait):", {
-          messageId: tempId,
-          senderId: currentUser._id,
-          recipientId: selectedFriend.id,
-          content: messageContent,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Emit with callback for acknowledgment
-        socket.emit(
-          "send_message",
-          {
+      if (socket) {
+        // Wait briefly for connection if socket exists but not connected yet
+        if (!socket.connected) {
+          console.log("⏳ Socket not connected yet, waiting briefly...");
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (socket.connected) {
+          socketEmitted = true;
+          console.log("🚀 Emitting message via socket INSTANTLY (no wait):", {
             messageId: tempId,
+            chatId,
             senderId: currentUser._id,
             recipientId: selectedFriend.id,
             content: messageContent,
             timestamp: new Date().toISOString(),
-          },
-          (response: any) => {
-            if (response?.success) {
-              console.log("✅ Socket acknowledged message delivery");
-            }
-          },
-        );
+          });
+
+          // Emit with callback for acknowledgment
+          socket.emit(
+            "send_message",
+            {
+              messageId: tempId,
+              chatId,
+              senderId: currentUser._id,
+              recipientId: selectedFriend.id,
+              content: messageContent,
+              timestamp: new Date().toISOString(),
+            },
+            (response: any) => {
+              if (response?.success) {
+                console.log("✅ Socket acknowledged message delivery");
+              } else {
+                console.warn("⚠️ Socket acknowledgment failed:", response);
+              }
+            },
+          );
+        } else {
+          console.warn("⚠️ Socket exists but not connected after wait");
+        }
+      } else {
+        console.warn("⚠️ Socket not available at all");
       }
 
       // Now wait for API response to get real message ID
@@ -436,8 +452,9 @@ export default function ChatArea({
       if (!socketEmitted) {
         const socket = getSocket();
         if (socket && socket.connected) {
-          console.log("Emitting send_message via socket with real ID:", {
+          console.log("📨 Emitting send_message via socket with real ID:", {
             messageId: savedMessage._id,
+            chatId,
             senderId: currentUser._id,
             recipientId: selectedFriend.id,
             content: messageContent,
@@ -446,13 +463,14 @@ export default function ChatArea({
 
           socket.emit("send_message", {
             messageId: savedMessage._id,
+            chatId,
             senderId: currentUser._id,
             recipientId: selectedFriend.id,
             content: messageContent,
             timestamp: savedMessage.timestamp,
           });
         } else {
-          console.warn("Socket not available, message sent via API only");
+          console.warn("⚠️ Socket not available, message sent via API only");
         }
       }
     } catch (error: any) {

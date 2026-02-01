@@ -86,7 +86,8 @@ io.on("connection", (socket) => {
   // Handle sending messages
   socket.on("send_message", async (data, callback) => {
     try {
-      const { messageId, chatId, senderId, recipientId, content, timestamp } = data;
+      const { messageId, chatId, senderId, recipientId, content, timestamp } =
+        data;
 
       // Validate required fields
       if (!messageId || !senderId || !recipientId || !content) {

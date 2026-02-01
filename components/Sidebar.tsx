@@ -92,9 +92,9 @@ export default function Sidebar({
     fetchChats();
     fetchFriends();
     fetchRequests();
-    
+
     // Request notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
+    if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
@@ -115,31 +115,42 @@ export default function Sidebar({
 
     const handleReceiveMessage = (data: any) => {
       console.log("📩 Received message in Sidebar:", data);
-      
+
       // Update unread count locally
       setChats((prevChats) => {
-        return prevChats.map((chat) => {
-          if (chat._id === data.chatId) {
-            // Only increment if not currently viewing this chat
-            const isViewingChat = selectedFriendId === data.senderId;
-            return {
-              ...chat,
-              unreadCount: isViewingChat ? (chat.unreadCount || 0) : (chat.unreadCount || 0) + 1,
-              lastMessage: data.content,
-              updatedAt: new Date().toISOString(),
-            };
-          }
-          return chat;
-        }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        return prevChats
+          .map((chat) => {
+            if (chat._id === data.chatId) {
+              // Only increment if not currently viewing this chat
+              const isViewingChat = selectedFriendId === data.senderId;
+              return {
+                ...chat,
+                unreadCount: isViewingChat
+                  ? chat.unreadCount || 0
+                  : (chat.unreadCount || 0) + 1,
+                lastMessage: data.content,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return chat;
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+          );
       });
 
       // Show browser notification if not viewing the chat
-      if (selectedFriendId !== data.senderId && 'Notification' in window && Notification.permission === 'granted') {
-        const senderName = data.senderName || 'Someone';
+      if (
+        selectedFriendId !== data.senderId &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        const senderName = data.senderName || "Someone";
         const notification = new Notification(`${senderName}`, {
           body: data.content,
-          icon: '/icon.png', // Add your app icon
-          badge: '/badge.png',
+          icon: "/icon.png", // Add your app icon
+          badge: "/badge.png",
           tag: data.chatId, // Prevent duplicate notifications
           requireInteraction: false,
         });
@@ -161,7 +172,7 @@ export default function Sidebar({
 
     const handleMessageRead = (data: { chatId: string }) => {
       console.log("✅ Messages marked as read:", data);
-      
+
       // Reset unread count for this chat
       setChats((prevChats) => {
         return prevChats.map((chat) => {
@@ -474,12 +485,16 @@ export default function Sidebar({
                             )}
                             {chat.unreadCount && chat.unreadCount > 0 && (
                               <span className="bg-[#25D366] text-white text-xs font-semibold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
-                                {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                                {chat.unreadCount > 99
+                                  ? "99+"
+                                  : chat.unreadCount}
                               </span>
                             )}
                           </div>
                         </div>
-                        <p className={`text-xs md:text-sm truncate mt-0.5 ${chat.unreadCount && chat.unreadCount > 0 ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                        <p
+                          className={`text-xs md:text-sm truncate mt-0.5 ${chat.unreadCount && chat.unreadCount > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}
+                        >
                           {chat.lastMessage || "Start chatting!"}
                         </p>
                       </div>

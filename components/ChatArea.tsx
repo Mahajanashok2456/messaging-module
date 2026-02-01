@@ -116,7 +116,7 @@ export default function ChatArea({
           ];
         });
         scrollToBottom();
-        
+
         // Play message received sound
         soundManager.playMessageReceived();
       }
@@ -186,7 +186,7 @@ export default function ChatArea({
     setMessages((prev) => [...prev, optimisticMessage]);
     setNewMessage("");
     scrollToBottom();
-    
+
     // Play message sent sound
     soundManager.playMessageSent();
 

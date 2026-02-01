@@ -222,7 +222,7 @@ export default function Sidebar({
     action: "accept" | "reject",
   ) => {
     try {
-      await api.put(`/api/friends/request/${action}`, { requestId });
+      await api.put(`friends/request/${action}`, { requestId });
 
       setRequests((prev) => prev.filter((req) => req.id !== requestId));
 
@@ -246,7 +246,7 @@ export default function Sidebar({
   const handleUpdateProfile = async () => {
     if (!newName.trim()) return;
     try {
-      const response = await api.put("/api/users/profile", {
+      const response = await api.put("users/profile", {
         username: newName,
       });
       setCurrentUser(response.data);

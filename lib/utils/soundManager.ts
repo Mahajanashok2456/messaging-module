@@ -54,13 +54,15 @@ const playSound = (soundType: SoundType) => {
 
     const audio = new Audio(soundMap[soundType]);
     audio.volume = Math.min(Math.max(settings.volume, 0), 1);
-    
+
     // If audio file fails to load, fall back to tone generator
     audio.onerror = () => {
-      console.warn(`Audio file not found: ${soundMap[soundType]}, using tone generator`);
+      console.warn(
+        `Audio file not found: ${soundMap[soundType]}, using tone generator`,
+      );
       playToneByType(soundType, settings.volume);
     };
-    
+
     audio.play().catch(() => {
       // If playback fails, try tone generator
       playToneByType(soundType, settings.volume);

@@ -11,7 +11,8 @@ const getAudioContext = (): InstanceType<AudioContext> | null => {
   if (typeof window === "undefined") return null;
 
   if (!audioContext) {
-    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass =
+      (window as any).AudioContext || (window as any).webkitAudioContext;
     if (AudioContextClass) {
       try {
         audioContext = new AudioContextClass();
@@ -29,7 +30,11 @@ const getAudioContext = (): InstanceType<AudioContext> | null => {
  * @param duration - Duration in milliseconds
  * @param volume - Volume (0-1)
  */
-export const playTone = (frequency: number = 800, duration: number = 150, volume: number = 0.3) => {
+export const playTone = (
+  frequency: number = 800,
+  duration: number = 150,
+  volume: number = 0.3,
+) => {
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -44,7 +49,10 @@ export const playTone = (frequency: number = 800, duration: number = 150, volume
     oscillator.type = "sine";
 
     gain.gain.setValueAtTime(volume, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+    gain.gain.exponentialRampToValueAtTime(
+      0.01,
+      ctx.currentTime + duration / 1000,
+    );
 
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + duration / 1000);

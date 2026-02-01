@@ -277,7 +277,7 @@ export default function Sidebar({
   };
 
   return (
-    <div className="w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-gray-300 flex flex-col h-full shadow-lg z-10">
+    <div className="w-full md:w-80 h-full bg-white border-b md:border-b-0 md:border-r border-gray-300 flex flex-col shadow-lg z-10">
       {/* Header / Navigation - WhatsApp style */}
       <div className="bg-[#008069] p-3 md:p-4">
         <div className="flex items-center justify-between text-white mb-2 md:mb-3">
@@ -344,7 +344,7 @@ export default function Sidebar({
       </div>
 
       {/* Content Area - Scrollable */}
-      <div className="flex-1 overflow-y-auto bg-white">
+      <div className="flex-1 overflow-y-auto bg-white min-h-0">
         {/* VIEW: CHATS */}
         {view === "chats" && (
           <div>
@@ -637,7 +637,9 @@ export default function Sidebar({
                     <Edit2 size={14} />
                   </button>
                 </p>
-                <p className="text-xs md:text-sm text-[#25D366] truncate">● Online</p>
+                <p className="text-xs md:text-sm text-[#25D366] truncate">
+                  ● Online
+                </p>
               </div>
             )}
           </div>

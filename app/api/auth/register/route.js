@@ -8,7 +8,11 @@ import {
   validatePassword,
 } from "@/lib/utils/sanitize";
 import { generateTokenPair } from "@/lib/utils/jwt";
-import AppError from "@/lib/utils/AppError";
+import { generateCsrfToken, setCsrfCookie } from "@/lib/utils/csrf";
+import { getCookieOptions } from "@/lib/utils/cookies";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req) {
   try {
@@ -80,19 +84,19 @@ export async function POST(req) {
             username: user.username,
             email: user.email,
           },
-          accessToken,
         },
       },
       { status: 201 },
     );
 
-    // Set refresh token as httpOnly cookie
-    response.cookies.set("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    const accessCookieOptions = getCookieOptions({ maxAge: 60 * 60 });
+    const refreshCookieOptions = getCookieOptions({ maxAge: 7 * 24 * 60 * 60 });
+
+    response.cookies.set("accessToken", accessToken, accessCookieOptions);
+    response.cookies.set("refreshToken", refreshToken, refreshCookieOptions);
+
+    const csrfToken = generateCsrfToken();
+    setCsrfCookie(response, csrfToken);
 
     return response;
   } catch (error) {

@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db/db";
 import { verifyAuth } from "@/lib/middleware/authNext";
 import { rateLimit } from "@/lib/middleware/rateLimiter";
 import { sanitizeInput } from "@/lib/utils/sanitize";
+import { requireCsrf } from "@/lib/utils/csrf";
 
 export async function POST(req) {
   try {
@@ -20,13 +21,16 @@ export async function POST(req) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { recipientId, recipient_id, content } = await req.json();
+    const csrfResult = requireCsrf(req);
+    if (csrfResult) return csrfResult;
+
+    const { recipientId, recipient_id, content, messageId } = await req.json();
     const senderId = user._id;
     const targetRecipientId = recipientId || recipient_id;
 
-    if (!targetRecipientId || !content) {
+    if (!targetRecipientId || !content || !messageId) {
       return NextResponse.json(
-        { message: "recipientId and content are required" },
+        { message: "recipientId, content, and messageId are required" },
         { status: 400 },
       );
     }
@@ -62,34 +66,55 @@ export async function POST(req) {
       );
     }
 
-    // Create and save message
-    const message = new Message({
+    // Idempotent create (prevents duplicates)
+    let message = await Message.findOne({ messageId });
+
+    if (message) {
+      return NextResponse.json(message, { status: 201 });
+    }
+
+    message = new Message({
       sender: senderId,
       recipient: targetRecipientId,
       content: sanitizedContent,
+      messageId,
     });
 
-    await message.save();
+    const responsePayload = {
+      _id: message._id,
+      messageId,
+      sender: senderId,
+      recipient: targetRecipientId,
+      content: sanitizedContent,
+      timestamp: message.timestamp,
+      status: "sent",
+    };
 
-    // Populate sender and recipient info
-    await message.populate("sender", "username");
-    await message.populate("recipient", "username");
+    // Persist asynchronously to keep API response fast
+    setImmediate(async () => {
+      try {
+        await message.save();
 
-    // Update the chat's last message
-    try {
-      const chat = await Chat.findOrCreateBetweenUsers(
-        senderId,
-        targetRecipientId,
-      );
-      chat.lastMessage = sanitizedContent.substring(0, 50);
-      chat.lastMessageTimestamp = new Date();
-      chat.updatedAt = new Date();
-      await chat.save();
-    } catch (chatError) {
-      console.error("Error updating chat last message:", chatError.message);
-    }
+        try {
+          const chat = await Chat.findOrCreateBetweenUsers(
+            senderId,
+            targetRecipientId,
+          );
+          chat.lastMessage = sanitizedContent.substring(0, 50);
+          chat.lastMessageTimestamp = new Date();
+          chat.updatedAt = new Date();
+          await chat.save();
+        } catch (chatError) {
+          console.error("Error updating chat last message:", chatError.message);
+        }
+      } catch (saveError) {
+        if (saveError.code !== 11000) {
+          console.error("Message save error:", saveError);
+        }
+      }
+    });
 
-    return NextResponse.json(message, { status: 201 });
+    return NextResponse.json(responsePayload, { status: 201 });
   } catch (error) {
     console.error("Message send error:", error);
     return NextResponse.json(

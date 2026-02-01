@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import ChatArea from "@/components/ChatArea";
 import { getSocket, disconnectSocket } from "@/lib/socket";
+import api from "@/lib/api";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -13,18 +14,30 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check authentication
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    const loadUser = async () => {
+      try {
+        const response = await api.get("auth/profile");
+        const profile = response.data?.data?.user;
 
-    // Load user info
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+        if (!profile) {
+          router.push("/login");
+          return;
+        }
+
+        setUser(profile);
+        localStorage.setItem("user", JSON.stringify(profile));
+
+        try {
+          await api.get("auth/csrf");
+        } catch (csrfError) {
+          console.warn("Failed to refresh CSRF token");
+        }
+      } catch (error) {
+        router.push("/login");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
     // Initialize socket
     const socket = getSocket();
@@ -32,7 +45,7 @@ export default function ChatPage() {
       // You can add global socket listeners here if needed
     }
 
-    setIsLoading(false);
+    loadUser();
 
     return () => {
       disconnectSocket();

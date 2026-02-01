@@ -14,6 +14,7 @@ interface Friend {
 
 interface Message {
   _id: string;
+  messageId?: string;
   sender: { _id: string; username: string } | string;
   recipient: { _id: string; username: string } | string;
   content: string;
@@ -119,7 +120,7 @@ export default function ChatArea({
       if (unreadMessages.length > 0) {
         try {
           await api.put("messages/mark-read", {
-            messageIds: unreadMessages.map((m) => m._id),
+            messageIds: unreadMessages.map((m) => m.messageId || m._id),
           });
 
           // Update local message status
@@ -135,7 +136,7 @@ export default function ChatArea({
           const socket = getSocket();
           if (socket && chatId) {
             socket.emit("mark_read", {
-              messageIds: unreadMessages.map((m) => m._id),
+              messageIds: unreadMessages.map((m) => m.messageId || m._id),
               readBy: currentUser._id,
             });
 
@@ -161,7 +162,10 @@ export default function ChatArea({
     const socket = getSocket();
     if (!socket) return;
 
-    const handleReceiveMessage = (message: any) => {
+    const handleReceiveMessage = (
+      message: any,
+      ack?: (payload: any) => void,
+    ) => {
       console.log("Received message via socket:", message);
 
       // Check if message belongs to current chat
@@ -185,15 +189,18 @@ export default function ChatArea({
 
         // Don't add duplicate messages
         setMessages((prev) => {
-          const messageId = message.messageId || message._id;
-          const exists = prev.some((msg) => msg._id === messageId);
+          const messageKey = message.messageId || message._id;
+          const exists = prev.some(
+            (msg) => msg._id === messageKey || msg.messageId === messageKey,
+          );
           if (exists) {
             console.log("Message already exists, skipping duplicate");
             return prev;
           }
 
           const newMsg: Message = {
-            _id: messageId,
+            _id: message._id || messageKey,
+            messageId: message.messageId || messageKey,
             sender:
               typeof message.sender === "string"
                 ? { _id: senderId, username: "" }
@@ -211,6 +218,13 @@ export default function ChatArea({
         });
         scrollToBottom();
 
+        if (typeof ack === "function") {
+          ack({
+            messageId: message.messageId || message._id,
+            status: "delivered",
+          });
+        }
+
         // Play message received sound
         soundManager.playMessageReceived();
       }
@@ -224,7 +238,7 @@ export default function ChatArea({
 
       setMessages((prev) =>
         prev.map((msg) =>
-          messageIds.includes(msg._id)
+          messageIds.includes(msg.messageId || msg._id)
             ? { ...msg, status: "read", readAt: new Date().toISOString() }
             : msg,
         ),
@@ -353,11 +367,15 @@ export default function ChatArea({
     }
 
     const messageContent = newMessage.trim();
-    const tempId = `temp-${Date.now()}`;
+    const clientMessageId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     // Optimistic UI update - add message immediately - ZERO DELAY
     const optimisticMessage: Message = {
-      _id: tempId,
+      _id: clientMessageId,
+      messageId: clientMessageId,
       sender: currentUser._id,
       recipient: selectedFriend.id,
       content: messageContent,
@@ -373,59 +391,15 @@ export default function ChatArea({
     soundManager.playMessageSent();
 
     try {
-      // Save to database via API - PARALLEL execution
+      // Save to database via API first (idempotent with messageId)
       const apiPromise = api.post("messages/send", {
         recipientId: selectedFriend.id,
         content: messageContent,
+        messageId: clientMessageId,
       });
 
-      // Get socket and emit IMMEDIATELY without waiting for API
+      // Get socket and emit after API save for reliability
       const socket = getSocket();
-      let socketEmitted = false;
-
-      if (socket) {
-        // Wait briefly for connection if socket exists but not connected yet
-        if (!socket.connected) {
-          console.log("⏳ Socket not connected yet, waiting briefly...");
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        if (socket.connected) {
-          socketEmitted = true;
-          console.log("🚀 Emitting message via socket INSTANTLY (no wait):", {
-            messageId: tempId,
-            chatId,
-            senderId: currentUser._id,
-            recipientId: selectedFriend.id,
-            content: messageContent,
-            timestamp: new Date().toISOString(),
-          });
-
-          // Emit with callback for acknowledgment
-          socket.emit(
-            "send_message",
-            {
-              messageId: tempId,
-              chatId,
-              senderId: currentUser._id,
-              recipientId: selectedFriend.id,
-              content: messageContent,
-              timestamp: new Date().toISOString(),
-            },
-            (response: any) => {
-              if (response?.success) {
-                console.log("✅ Socket acknowledged message delivery");
-              } else {
-                console.warn("⚠️ Socket acknowledgment failed:", response);
-              }
-            },
-          );
-        } else {
-          console.warn("⚠️ Socket exists but not connected after wait");
-        }
-      } else {
-        console.warn("⚠️ Socket not available at all");
-      }
 
       // Now wait for API response to get real message ID
       const response = await apiPromise;
@@ -435,49 +409,56 @@ export default function ChatArea({
       // Update the temporary message with real data from server
       setMessages((prev) =>
         prev.map((msg) =>
-          msg._id === tempId
+          msg._id === clientMessageId
             ? {
                 _id: savedMessage._id,
+                messageId: savedMessage.messageId || clientMessageId,
                 sender: savedMessage.sender,
                 recipient: savedMessage.recipient,
                 content: savedMessage.content,
                 timestamp: savedMessage.timestamp,
-                status: socketEmitted ? "delivered" : "sent",
+                status: "sent",
               }
             : msg,
         ),
       );
 
-      // If socket wasn't available before, send now with real ID
-      if (!socketEmitted) {
-        const socket = getSocket();
-        if (socket && socket.connected) {
-          console.log("📨 Emitting send_message via socket with real ID:", {
-            messageId: savedMessage._id,
-            chatId,
-            senderId: currentUser._id,
-            recipientId: selectedFriend.id,
-            content: messageContent,
-            timestamp: savedMessage.timestamp,
-          });
+      if (socket && socket.connected) {
+        console.log("📨 Emitting send_message via socket:", {
+          messageId: savedMessage.messageId || clientMessageId,
+          chatId,
+          senderId: currentUser._id,
+          recipientId: selectedFriend.id,
+          content: messageContent,
+          timestamp: savedMessage.timestamp,
+        });
 
-          socket.emit("send_message", {
-            messageId: savedMessage._id,
+        socket.emit(
+          "send_message",
+          {
+            messageId: savedMessage.messageId || clientMessageId,
             chatId,
             senderId: currentUser._id,
             recipientId: selectedFriend.id,
             content: messageContent,
             timestamp: savedMessage.timestamp,
-          });
-        } else {
-          console.warn("⚠️ Socket not available, message sent via API only");
-        }
+          },
+          (response: any) => {
+            if (response?.success) {
+              console.log("✅ Socket acknowledged message delivery");
+            } else {
+              console.warn("⚠️ Socket acknowledgment failed:", response);
+            }
+          },
+        );
+      } else {
+        console.warn("⚠️ Socket not available, message sent via API only");
       }
     } catch (error: any) {
       console.error("❌ Failed to send message", error);
 
       // Remove optimistic message on error
-      setMessages((prev) => prev.filter((msg) => msg._id !== tempId));
+      setMessages((prev) => prev.filter((msg) => msg._id !== clientMessageId));
       setNewMessage(messageContent); // Restore message text
 
       alert(error.response?.data?.message || "Failed to send message");

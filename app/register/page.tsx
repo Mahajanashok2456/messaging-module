@@ -27,19 +27,13 @@ export default function RegisterPage() {
         password,
       });
 
-      // API returns: { status: "success", data: { user: {...}, accessToken: "..." } }
       const { data } = response.data;
-      const accessToken = data?.accessToken;
 
-      if (accessToken) {
-        localStorage.setItem("token", accessToken);
-        if (data?.user) {
-          localStorage.setItem("user", JSON.stringify(data.user));
-        }
-        router.push("/chat");
-      } else {
-        setError("Registration failed: No token received");
+      if (data?.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
       }
+
+      router.push("/chat");
     } catch (err: any) {
       setError(err.response?.data?.message || "Something went wrong");
     } finally {

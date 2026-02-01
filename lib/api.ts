@@ -7,14 +7,25 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,
 });
+
+const getCookieValue = (name: string) => {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split(";")
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${name}=`));
+  if (!match) return null;
+  return decodeURIComponent(match.split("=")[1]);
+};
 
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("token");
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      const csrfToken = getCookieValue("csrfToken");
+      if (csrfToken) {
+        config.headers["x-csrf-token"] = csrfToken;
       }
     }
     return config;
@@ -29,7 +40,6 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
         // Optional: Redirect to login if needed, but usually handled by components
         // window.location.href = '/login';
       }

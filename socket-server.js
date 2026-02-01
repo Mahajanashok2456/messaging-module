@@ -3,7 +3,11 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const helmet = require("helmet");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
 const Message = require("./lib/db/Message");
 const Chat = require("./lib/db/Chat");
 const User = require("./lib/db/User");
@@ -18,18 +22,95 @@ const {
 const app = express();
 const server = http.createServer(app);
 
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
 // CORS configuration for Socket.io
+const allowedOrigins = [
+  "http://localhost:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:3000",
-      process.env.FRONTEND_URL || "*", // Your Vercel URL
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "x-csrf-token"],
   },
-  transports: ["websocket", "polling"],
+  allowRequest: (req, callback) => {
+    const origin = req.headers.origin;
+    const isAllowed = origin && allowedOrigins.includes(origin);
+    callback(null, Boolean(isAllowed));
+  },
+  transports: ["websocket"],
+  allowUpgrades: false,
+  serveClient: false,
+  pingInterval: parseInt(process.env.SOCKET_PING_INTERVAL_MS || "25000", 10),
+  pingTimeout: parseInt(process.env.SOCKET_PING_TIMEOUT_MS || "20000", 10),
+  maxHttpBufferSize: 1e6,
 });
+
+const ACK_TIMEOUT_MS = parseInt(
+  process.env.SOCKET_ACK_TIMEOUT_MS || "5000",
+  10,
+);
+const RETRY_INTERVAL_MS = parseInt(
+  process.env.MESSAGE_RETRY_INTERVAL_MS || "15000",
+  10,
+);
+const RETRY_MAX_ATTEMPTS = parseInt(
+  process.env.MESSAGE_RETRY_MAX_ATTEMPTS || "8",
+  10,
+);
+
+const parseCookies = (cookieHeader = "") => {
+  return cookieHeader.split(";").reduce((acc, part) => {
+    const [key, ...rest] = part.trim().split("=");
+    if (!key) return acc;
+    acc[key] = decodeURIComponent(rest.join("="));
+    return acc;
+  }, {});
+};
+
+const verifySocketToken = (socket) => {
+  const cookies = parseCookies(socket.handshake.headers.cookie || "");
+  const cookieToken = cookies.accessToken;
+  const headerToken = socket.handshake.auth?.token;
+  const token = cookieToken || headerToken;
+
+  if (!token) return null;
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: "mess-app",
+      audience: "mess-app-users",
+    });
+    return decoded.userId;
+  } catch (error) {
+    return null;
+  }
+};
+
+const setupRedisAdapter = async () => {
+  if (!process.env.REDIS_URL) return;
+
+  const pubClient = createClient({ url: process.env.REDIS_URL });
+  const subClient = pubClient.duplicate();
+
+  pubClient.on("error", (err) => console.error("❌ Redis adapter error:", err));
+  subClient.on("error", (err) => console.error("❌ Redis adapter error:", err));
+
+  await pubClient.connect();
+  await subClient.connect();
+
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log("✅ Socket.io Redis adapter enabled");
+};
 
 // In-memory fallback if Redis unavailable
 const onlineUsersMap = new Map(); // userId -> socketId
@@ -59,6 +140,7 @@ async function connectDB() {
 (async () => {
   await connectDB();
   await connectRedis();
+  await setupRedisAdapter();
 })();
 
 // Health check endpoint
@@ -79,6 +161,63 @@ app.get("/", (req, res) => {
 
 const normalizeUserRoom = (userId) =>
   userId && userId.startsWith("user:") ? userId : `user:${userId}`;
+
+const calculateRetryDelay = (attempts) => {
+  const base = 2000;
+  const max = 60 * 1000;
+  return Math.min(base * Math.pow(2, attempts), max);
+};
+
+const emitWithAck = async ({ recipientRoom, payload, messageId, attempt }) => {
+  try {
+    const acked = await new Promise((resolve) => {
+      io.to(recipientRoom)
+        .timeout(ACK_TIMEOUT_MS)
+        .emit("receive_message", payload, (error, responses) => {
+          resolve(!error && Array.isArray(responses) && responses.length > 0);
+        });
+    });
+
+    if (acked) {
+      await Message.findOneAndUpdate(
+        { messageId },
+        {
+          $set: {
+            status: "delivered",
+            lastDeliveryAttemptAt: new Date(),
+          },
+          $inc: { deliveryAttempts: 1 },
+        },
+      );
+      return true;
+    }
+  } catch (error) {
+    console.warn(`⚠️ ACK timeout for message ${messageId}`, error.message);
+  }
+
+  await Message.findOneAndUpdate(
+    { messageId },
+    {
+      $set: {
+        status: "sent",
+        lastDeliveryAttemptAt: new Date(),
+        nextRetryAt: new Date(Date.now() + calculateRetryDelay(attempt)),
+      },
+      $inc: { deliveryAttempts: 1 },
+    },
+  );
+
+  return false;
+};
+
+io.use((socket, next) => {
+  const userId = verifySocketToken(socket);
+  if (!userId) {
+    return next(new Error("Authentication error"));
+  }
+  socket.data.userId = userId;
+  return next();
+});
 
 /**
  * HELPER: Mark user as online in both Redis and MongoDB
@@ -162,6 +301,7 @@ async function deliverPendingMessages(userId, socket) {
     const pendingMessages = await Message.find({
       recipient: userId,
       status: "sent",
+      $or: [{ nextRetryAt: null }, { nextRetryAt: { $lte: new Date() } }],
     })
       .populate("sender", "username")
       .sort({ timestamp: 1 }); // Oldest first
@@ -172,26 +312,26 @@ async function deliverPendingMessages(userId, socket) {
       );
 
       for (const msg of pendingMessages) {
-        // Emit message to user's socket
         const userRoom = normalizeUserRoom(userId);
 
         const messagePayload = {
           _id: msg._id,
-          messageId: msg._id,
+          messageId: msg.messageId,
           senderId: msg.sender._id,
           senderName: msg.sender.username,
           recipientId: msg.recipient,
           recipient: msg.recipient,
           content: msg.content,
           timestamp: msg.timestamp,
-          status: "delivered",
+          status: "sent",
         };
 
-        io.to(userRoom).emit("receive_message", messagePayload);
-
-        // Update message status to "delivered"
-        msg.status = "delivered";
-        await msg.save();
+        await emitWithAck({
+          recipientRoom: userRoom,
+          payload: messagePayload,
+          messageId: msg.messageId,
+          attempt: msg.deliveryAttempts + 1,
+        });
       }
 
       console.log(
@@ -211,34 +351,34 @@ io.on("connection", async (socket) => {
 
   let currentUserId = null; // Track user for this socket
 
+  const authenticatedUserId = socket.data.userId;
+  const userRoom = normalizeUserRoom(authenticatedUserId);
+  socket.join(userRoom);
+  currentUserId = authenticatedUserId;
+  console.log(
+    `User ${authenticatedUserId} auto-joined personal room ${userRoom} (socket: ${socket.id})`,
+  );
+
   // Join user's personal room (for receiving messages on all devices)
-  socket.on("join_user_room", async (userId) => {
-    const room = normalizeUserRoom(userId);
-    socket.join(room);
-    currentUserId = userId; // Store for disconnect handler
+  socket.on("join_user_room", async () => {
+    // No-op: room join is enforced server-side
+  });
 
-    console.log(
-      `User ${userId} joined personal room ${room} (socket: ${socket.id})`,
-    );
+  // Presence and offline delivery
+  (async () => {
+    await markUserOnline(authenticatedUserId, socket.id);
+    await deliverPendingMessages(authenticatedUserId, socket);
 
-    // ============================================
-    // PRESENCE TRACKING: Mark user as ONLINE
-    // ============================================
-    await markUserOnline(userId, socket.id);
-
-    // ============================================
-    // OFFLINE MESSAGE DELIVERY: Send pending messages
-    // ============================================
-    await deliverPendingMessages(userId, socket);
-
-    // Broadcast to user's friends that they're online
     try {
-      const user = await User.findById(userId).populate("friends", "_id");
+      const user = await User.findById(authenticatedUserId).populate(
+        "friends",
+        "_id",
+      );
       if (user && user.friends) {
         user.friends.forEach((friend) => {
           const friendRoom = normalizeUserRoom(friend._id);
           io.to(friendRoom).emit("user_online", {
-            userId,
+            userId: authenticatedUserId,
             timestamp: new Date().toISOString(),
           });
         });
@@ -246,12 +386,7 @@ io.on("connection", async (socket) => {
     } catch (error) {
       console.error("Error broadcasting online status:", error);
     }
-  });
-
-  socket.on("join_room", (userId) => {
-    socket.join(userId);
-    console.log(`User ${userId} joined room`);
-  });
+  })();
 
   // Handle sending messages
   socket.on("send_message", async (data, callback) => {
@@ -277,104 +412,73 @@ io.on("connection", async (socket) => {
         recipientId,
       });
 
-      // ============================================
-      // STEP 1: MESSAGE IS ALREADY SAVED IN DB BY API
-      // (with status="sent")
-      // ============================================
-
-      // Fetch sender info from database
-      let senderName = "Someone";
-      try {
-        const sender = await User.findById(senderId).select("username");
-        if (sender) {
-          senderName = sender.username;
-        }
-      } catch (err) {
-        console.error("Error fetching sender info:", err);
+      if (socket.data.userId && senderId !== socket.data.userId) {
+        if (callback) callback({ error: "Sender mismatch" });
+        return;
       }
+      const messageTimestamp = timestamp || new Date();
+      const senderName = data.senderName || "Someone";
 
-      const messageTimestamp = timestamp || new Date().toISOString();
+      const messagePayload = {
+        _id: messageId,
+        messageId,
+        senderId,
+        sender: senderId,
+        senderName,
+        recipientId,
+        recipient: recipientId,
+        chatId,
+        content,
+        timestamp: messageTimestamp,
+        status: "sent",
+      };
 
-      // ============================================
-      // STEP 2: CHECK IF RECEIVER IS ONLINE (Redis check)
-      // ============================================
-      const isReceiverOnline = await isUserOnline(recipientId);
+      // Emit immediately (non-blocking)
+      const recipientRoom = normalizeUserRoom(recipientId);
+      io.to(recipientRoom).emit("receive_message", messagePayload);
 
-      let finalStatus = "sent"; // Default status
+      const senderRoom = normalizeUserRoom(senderId);
+      socket.to(senderRoom).emit("receive_message", messagePayload);
 
-      if (isReceiverOnline) {
-        // ============================================
-        // RECEIVER IS ONLINE: Deliver immediately
-        // ============================================
-        console.log(
-          `✅ Receiver ${recipientId} is ONLINE - delivering instantly`,
-        );
-
-        const messagePayload = {
-          _id: messageId,
-          messageId: messageId,
-          senderId,
-          sender: senderId,
-          senderName: senderName,
-          recipientId,
-          recipient: recipientId,
-          chatId,
-          content,
-          timestamp: messageTimestamp,
-          status: "delivered",
-        };
-
-        // Emit to recipient's room (all their devices)
-        const recipientRoom = normalizeUserRoom(recipientId);
-        io.to(recipientRoom).emit("receive_message", messagePayload);
-        console.log(`📤 Message sent to recipient room ${recipientRoom}`);
-
-        // Also emit to sender's other devices (except the sending one)
-        const senderRoom = normalizeUserRoom(senderId);
-        socket.to(senderRoom).emit("receive_message", messagePayload);
-        console.log(
-          `📤 Message sent to sender's other devices (${senderRoom})`,
-        );
-
-        // Update message status in DB to "delivered"
-        try {
-          await Message.findByIdAndUpdate(messageId, {
-            status: "delivered",
-          });
-          finalStatus = "delivered";
-          console.log(`✅ Message ${messageId} marked as DELIVERED in DB`);
-        } catch (dbError) {
-          console.error("Error updating message status:", dbError);
-        }
-      } else {
-        // ============================================
-        // RECEIVER IS OFFLINE: Keep message pending
-        // ============================================
-        console.log(
-          `⏸️ Receiver ${recipientId} is OFFLINE - message stays PENDING`,
-        );
-        console.log(`📬 Message will be delivered when user comes online`);
-
-        // Optional: Trigger push notification here
-        // await sendPushNotification(recipientId, senderName, content);
-
-        finalStatus = "sent"; // Message stays in "sent" state
-      }
-
-      // Send acknowledgment back to sender
       if (callback) {
         callback({
           success: true,
-          messageId: messageId,
-          status: finalStatus,
+          messageId,
+          status: "sent",
           timestamp: messageTimestamp,
-          receiverOnline: isReceiverOnline,
         });
       }
 
-      console.log(
-        `✅ Message ${messageId} processing complete - Status: ${finalStatus}`,
-      );
+      // Persist + delivery bookkeeping asynchronously
+      setImmediate(async () => {
+        try {
+          let dbMessage = await Message.findOne({ messageId });
+
+          if (!dbMessage) {
+            dbMessage = new Message({
+              sender: senderId,
+              recipient: recipientId,
+              content,
+              messageId,
+            });
+            await dbMessage.save();
+          }
+
+          // Attempt ACK-based delivery without blocking the event loop
+          await emitWithAck({
+            recipientRoom,
+            payload: {
+              ...messagePayload,
+              _id: dbMessage._id,
+              timestamp: dbMessage.timestamp || messageTimestamp,
+            },
+            messageId,
+            attempt: dbMessage.deliveryAttempts + 1,
+          });
+        } catch (error) {
+          console.error("Error in async message persistence:", error);
+        }
+      });
     } catch (error) {
       console.error("Error handling send_message:", error);
       if (callback) callback({ error: error.message });
@@ -465,6 +569,50 @@ io.on("connection", async (socket) => {
     }
   });
 });
+
+const retryPendingMessages = async () => {
+  try {
+    const now = new Date();
+    const pending = await Message.find({
+      status: "sent",
+      deliveryAttempts: { $lt: RETRY_MAX_ATTEMPTS },
+      nextRetryAt: { $lte: now },
+    })
+      .populate("sender", "username")
+      .limit(200);
+
+    for (const msg of pending) {
+      const recipientId = msg.recipient.toString();
+      const recipientRoom = normalizeUserRoom(recipientId);
+      const isOnline = await isUserOnline(recipientId);
+
+      if (!isOnline) continue;
+
+      const payload = {
+        _id: msg._id,
+        messageId: msg.messageId,
+        senderId: msg.sender._id,
+        senderName: msg.sender.username,
+        recipientId,
+        recipient: recipientId,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        status: "sent",
+      };
+
+      await emitWithAck({
+        recipientRoom,
+        payload,
+        messageId: msg.messageId,
+        attempt: msg.deliveryAttempts + 1,
+      });
+    }
+  } catch (error) {
+    console.error("Error retrying pending messages:", error);
+  }
+};
+
+setInterval(retryPendingMessages, RETRY_INTERVAL_MS);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

@@ -5,6 +5,9 @@ import { verifyAuth } from "@/lib/middleware/authNext";
 import { rateLimit } from "@/lib/middleware/rateLimiter";
 import { sanitizeInput } from "@/lib/utils/sanitize";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET(req) {
   try {
     // Apply rate limiting (30 searches per 15 minutes)

@@ -56,6 +56,14 @@ describe("Input Sanitization", () => {
       expect(validatePassword("MyPass@2025")).toBe(true);
     });
 
+    test("should accept password with various special characters", () => {
+      expect(validatePassword("Test#1234")).toBe(true);
+      expect(validatePassword("Pass$2025")).toBe(true);
+      expect(validatePassword("Pwd%secure")).toBe(true);
+      expect(validatePassword("MyP-word1")).toBe(true);
+      expect(validatePassword("Secure_Pwd123")).toBe(true);
+    });
+
     test("should reject password without uppercase", () => {
       expect(validatePassword("weak@123")).toBe(false);
     });

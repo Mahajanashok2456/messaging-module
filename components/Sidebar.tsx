@@ -513,7 +513,7 @@ export default function Sidebar({
                 <input
                   type="text"
                   placeholder="Search by username or email..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm border-2 border-gray-200 rounded-full focus:outline-none focus:border-[#25D366] bg-gray-50"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm text-black placeholder-gray-400 border-2 border-gray-200 rounded-full focus:outline-none focus:border-[#25D366] bg-gray-50"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus

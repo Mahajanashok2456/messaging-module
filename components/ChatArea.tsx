@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { Send, ArrowLeft } from "lucide-react";
+import { soundManager } from "@/lib/utils/soundManager";
 
 interface Friend {
   id: string;
@@ -115,6 +116,9 @@ export default function ChatArea({
           ];
         });
         scrollToBottom();
+        
+        // Play message received sound
+        soundManager.playMessageReceived();
       }
     };
 
@@ -182,6 +186,9 @@ export default function ChatArea({
     setMessages((prev) => [...prev, optimisticMessage]);
     setNewMessage("");
     scrollToBottom();
+    
+    // Play message sent sound
+    soundManager.playMessageSent();
 
     try {
       // Save to database via API

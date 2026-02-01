@@ -16,7 +16,9 @@ import {
   Edit2,
   Save,
   MoreVertical,
+  Volume2,
 } from "lucide-react";
+import SoundSettings from "./SoundSettings";
 
 interface Friend {
   id: string;
@@ -81,6 +83,7 @@ export default function Sidebar({
   const [isSearching, setIsSearching] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [newName, setNewName] = useState("");
+  const [showSoundSettings, setShowSoundSettings] = useState(false);
 
   // Initial Data Fetch
   useEffect(() => {
@@ -282,13 +285,22 @@ export default function Sidebar({
       <div className="bg-[#008069] p-3 md:p-4">
         <div className="flex items-center justify-between text-white mb-2 md:mb-3">
           <h2 className="text-lg md:text-xl font-medium">WhatsApp</h2>
-          <button
-            onClick={handleLogout}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            title="Logout"
-          >
-            <LogOut size={20} />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowSoundSettings(!showSoundSettings)}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              title="Sound Settings"
+            >
+              <Volume2 size={20} />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              title="Logout"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="flex space-x-1 md:space-x-2 bg-white/10 rounded-full p-1">
@@ -345,6 +357,13 @@ export default function Sidebar({
 
       {/* Content Area - Scrollable */}
       <div className="flex-1 overflow-y-auto bg-white min-h-0">
+        {/* Sound Settings Panel */}
+        {showSoundSettings && (
+          <div className="p-3 md:p-4 border-b border-gray-200 bg-gray-50">
+            <SoundSettings onClose={() => setShowSoundSettings(false)} />
+          </div>
+        )}
+
         {/* VIEW: CHATS */}
         {view === "chats" && (
           <div>

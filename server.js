@@ -30,13 +30,17 @@ app.prepare().then(() => {
     return next(new Error("Authentication error"));
   });
 
+  const normalizeUserRoom = (userId) =>
+    userId && userId.startsWith("user:") ? userId : `user:${userId}`;
+
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
     // Join user-specific room for direct messaging
     socket.on("join_user_room", (userId) => {
-      socket.join(`user:${userId}`);
-      console.log(`User ${userId} joined room`);
+      const room = normalizeUserRoom(userId);
+      socket.join(room);
+      console.log(`User ${userId} joined room ${room}`);
     });
 
     // Handle incoming messages
@@ -44,7 +48,8 @@ app.prepare().then(() => {
       console.log("Message received via socket:", data);
 
       // Emit to recipient for real-time delivery
-      io.to(`user:${data.recipientId}`).emit("receive_message", {
+      const recipientRoom = normalizeUserRoom(data.recipientId);
+      io.to(recipientRoom).emit("receive_message", {
         messageId: data.messageId,
         _id: data.messageId,
         senderId: data.senderId,
@@ -61,12 +66,13 @@ app.prepare().then(() => {
         timestamp: data.timestamp || new Date(),
       });
 
-      console.log(`Message ${data.messageId} sent to user:${data.recipientId}`);
+      console.log(`Message ${data.messageId} sent to ${recipientRoom}`);
     });
 
     // Handle typing indicators
     socket.on("typing", (data) => {
-      io.to(`user:${data.recipientId}`).emit("user_typing", {
+      const recipientRoom = normalizeUserRoom(data.recipientId);
+      io.to(recipientRoom).emit("user_typing", {
         userId: data.userId,
         isTyping: data.isTyping,
       });
@@ -74,7 +80,8 @@ app.prepare().then(() => {
 
     // Handle message read receipts
     socket.on("message_read", (data) => {
-      io.to(`user:${data.senderId}`).emit("message_read_receipt", {
+      const senderRoom = normalizeUserRoom(data.senderId);
+      io.to(senderRoom).emit("message_read_receipt", {
         messageId: data.messageId,
         readAt: new Date(),
       });

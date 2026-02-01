@@ -1,8 +1,12 @@
 import { io, Socket } from "socket.io-client";
 
 // Socket server URL - will be your Render URL in production
+// Prefer explicit env; otherwise use same-origin in dev to avoid mismatch
 const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_SOCKET_URL?.trim() ||
+  (typeof window !== "undefined"
+    ? window.location.origin
+    : "http://localhost:5000");
 
 console.log("Connecting to Socket.io server:", SOCKET_URL);
 

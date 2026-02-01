@@ -62,14 +62,20 @@ app.get("/", (req, res) => {
   });
 });
 
+const normalizeUserRoom = (userId) =>
+  userId && userId.startsWith("user:") ? userId : `user:${userId}`;
+
 // Socket.io connection handling
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
   // Join user's personal room (for receiving messages on all devices)
   socket.on("join_user_room", (userId) => {
-    socket.join(userId);
-    console.log(`User ${userId} joined personal room (socket: ${socket.id})`);
+    const room = normalizeUserRoom(userId);
+    socket.join(room);
+    console.log(
+      `User ${userId} joined personal room ${room} (socket: ${socket.id})`,
+    );
   });
 
   socket.on("join_room", (userId) => {
@@ -116,13 +122,16 @@ io.on("connection", (socket) => {
       };
 
       // Message is already saved by API - just broadcast it IMMEDIATELY
+      const recipientRoom = normalizeUserRoom(recipientId);
+      const senderRoom = normalizeUserRoom(senderId);
+
       // Emit to recipient's room (all their devices) - INSTANT
-      io.to(recipientId).emit("receive_message", messagePayload);
-      console.log(`📤 Message sent to recipient room ${recipientId}`);
+      io.to(recipientRoom).emit("receive_message", messagePayload);
+      console.log(`📤 Message sent to recipient room ${recipientRoom}`);
 
       // Also emit to sender's other devices (except the sending one) - INSTANT
-      socket.to(senderId).emit("receive_message", messagePayload);
-      console.log(`📤 Message sent to sender's other devices`);
+      socket.to(senderRoom).emit("receive_message", messagePayload);
+      console.log(`📤 Message sent to sender's other devices (${senderRoom})`);
 
       // Send immediate acknowledgment back to sender - NO DELAY
       if (callback) {
@@ -148,7 +157,8 @@ io.on("connection", (socket) => {
       const { messageIds, readBy } = data;
 
       // Broadcast read receipts to the sender's room (other devices + original sender)
-      io.to(readBy).emit("messages_read", {
+      const readerRoom = normalizeUserRoom(readBy);
+      io.to(readerRoom).emit("messages_read", {
         messageIds,
         readBy,
         timestamp: new Date().toISOString(),
@@ -163,12 +173,14 @@ io.on("connection", (socket) => {
   // Handle friend request notifications
   socket.on("friend_request_sent", (data) => {
     const { recipientId, sender } = data;
-    io.to(recipientId).emit("new_friend_request", sender);
+    const recipientRoom = normalizeUserRoom(recipientId);
+    io.to(recipientRoom).emit("new_friend_request", sender);
   });
 
   socket.on("friend_request_accepted", (data) => {
     const { senderId, acceptor } = data;
-    io.to(senderId).emit("friend_request_accepted", acceptor);
+    const senderRoom = normalizeUserRoom(senderId);
+    io.to(senderRoom).emit("friend_request_accepted", acceptor);
   });
 
   socket.on("disconnect", () => {

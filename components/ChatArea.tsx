@@ -36,7 +36,9 @@ export default function ChatArea({
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (selectedFriend) {
@@ -227,9 +229,35 @@ export default function ChatArea({
 
     socket.on("messages_read", handleMessagesRead);
 
+    // Handle typing indicators
+    const handleTypingIndicator = (data: any) => {
+      const { userId, isTyping: typing } = data;
+      if (userId === selectedFriend.id) {
+        setIsTyping(typing);
+        
+        // Auto-hide typing indicator after 3 seconds
+        if (typing) {
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+          }
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsTyping(false);
+          }, 3000);
+        }
+      }
+    };
+
+    socket.on("user_typing", handleTypingIndicator);
+
     return () => {
       socket.off("receive_message", handleReceiveMessage);
       socket.off("messages_read", handleMessagesRead);
+      socket.off("user_typing", handleTypingIndicator);
+      
+      // Clear typing timeout on cleanup
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, [selectedFriend.id, currentUser._id]);
 
@@ -271,9 +299,49 @@ export default function ChatArea({
     }, 100);
   };
 
+  const handleTyping = (value: string) => {
+    setNewMessage(value);
+
+    const socket = getSocket();
+    if (!socket || !socket.connected) return;
+
+    // Emit typing indicator
+    socket.emit("typing", {
+      userId: currentUser._id,
+      recipientId: selectedFriend.id,
+      isTyping: value.length > 0,
+    });
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Stop typing indicator after 1 second of inactivity
+    if (value.length > 0) {
+      typingTimeoutRef.current = setTimeout(() => {
+        socket.emit("typing", {
+          userId: currentUser._id,
+          recipientId: selectedFriend.id,
+          isTyping: false,
+        });
+      }, 1000);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
+
+    // Stop typing indicator
+    const socket = getSocket();
+    if (socket && socket.connected) {
+      socket.emit("typing", {
+        userId: currentUser._id,
+        recipientId: selectedFriend.id,
+        isTyping: false,
+      });
+    }
 
     const messageContent = newMessage.trim();
     const tempId = `temp-${Date.now()}`;
@@ -509,6 +577,18 @@ export default function ChatArea({
             );
           })
         )}
+        {/* Typing indicator */}
+        {isTyping && (
+          <div className="flex justify-start mb-2">
+            <div className="bg-white px-4 py-2 rounded-lg shadow-md">
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -520,7 +600,7 @@ export default function ChatArea({
         <input
           type="text"
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => handleTyping(e.target.value)}
           placeholder="Type a message"
           className="flex-1 bg-white border border-gray-300 rounded-full px-3 md:px-4 py-2 text-xs md:text-sm text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
         />

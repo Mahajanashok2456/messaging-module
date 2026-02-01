@@ -170,6 +170,24 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handle typing indicators
+  socket.on("typing", (data) => {
+    try {
+      const { userId, recipientId, isTyping } = data;
+      const recipientRoom = normalizeUserRoom(recipientId);
+      
+      // Broadcast typing status to recipient
+      io.to(recipientRoom).emit("user_typing", {
+        userId,
+        isTyping,
+      });
+
+      console.log(`User ${userId} typing status: ${isTyping} to ${recipientRoom}`);
+    } catch (error) {
+      console.error("Error handling typing indicator:", error);
+    }
+  });
+
   // Handle friend request notifications
   socket.on("friend_request_sent", (data) => {
     const { recipientId, sender } = data;

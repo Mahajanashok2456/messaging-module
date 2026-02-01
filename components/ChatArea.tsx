@@ -69,6 +69,11 @@ export default function ChatArea({
     }
   }, [selectedFriend]);
 
+  // Auto-scroll when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -190,7 +195,15 @@ export default function ChatArea({
       // Update the temporary message with real data from server
       setMessages((prev) =>
         prev.map((msg) =>
-          msg._id === tempId ? { ...savedMessage, _id: savedMessage._id } : msg,
+          msg._id === tempId
+            ? {
+                _id: savedMessage._id,
+                sender: savedMessage.sender,
+                recipient: savedMessage.recipient,
+                content: savedMessage.content,
+                timestamp: savedMessage.timestamp,
+              }
+            : msg,
         ),
       );
 

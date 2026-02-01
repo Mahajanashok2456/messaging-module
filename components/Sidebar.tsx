@@ -193,7 +193,7 @@ export default function Sidebar({
     setIsSearching(true);
     try {
       const response = await api.get(
-        `/api/friends/search?query=${encodeURIComponent(query)}`,
+        `friends/search?query=${encodeURIComponent(query)}`,
       );
       setSearchResults(response.data);
     } catch (error) {

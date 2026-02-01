@@ -81,10 +81,14 @@ io.on("connection", (socket) => {
   socket.on("send_message", async (data) => {
     try {
       const { messageId, senderId, recipientId, content, timestamp } = data;
-      
+
       // Validate required fields
       if (!senderId || !recipientId || !content) {
-        console.error("Missing required fields:", { senderId, recipientId, content });
+        console.error("Missing required fields:", {
+          senderId,
+          recipientId,
+          content,
+        });
         return;
       }
 
@@ -98,8 +102,8 @@ io.on("connection", (socket) => {
 
       // Save message to database
       const newMessage = new Message({
-        sender: mongoose.Types.ObjectId(senderId),
-        recipient: mongoose.Types.ObjectId(recipientId),
+        sender: new mongoose.Types.ObjectId(senderId),
+        recipient: new mongoose.Types.ObjectId(recipientId),
         content,
         timestamp: new Date(timestamp),
       });

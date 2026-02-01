@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "env": {
+    "MONGODB_URI": "@mongodb-uri",
+    "JWT_SECRET": "@jwt-secret",
+    "ENCRYPTION_KEY": "@encryption-key",
+    "NEXT_PUBLIC_SOCKET_URL": "@socket-url"
+  },
+  "build": {
+    "env": {
+      "MONGODB_URI": "@mongodb-uri",
+      "JWT_SECRET": "@jwt-secret",
+      "ENCRYPTION_KEY": "@encryption-key",
+      "NEXT_PUBLIC_SOCKET_URL": "@socket-url"
+    }
+  }
+}

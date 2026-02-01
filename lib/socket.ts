@@ -1,7 +1,10 @@
 import { io, Socket } from "socket.io-client";
 
+// Socket server URL - will be your Render URL in production
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5000";
+
+console.log('Connecting to Socket.io server:', SOCKET_URL);
 
 let socket: Socket | null = null;
 

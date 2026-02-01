@@ -1,5 +1,5 @@
 /**
- * Sound manager for WhatsApp-style notifications
+ * Sound manager for Lets chat-style notifications
  * Handles playing notification and chat sounds
  */
 

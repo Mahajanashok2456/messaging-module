@@ -18,6 +18,8 @@ interface Message {
   recipient: { _id: string; username: string } | string;
   content: string;
   timestamp: string;
+  status?: "sent" | "delivered" | "read";
+  readAt?: string;
 }
 
 interface ChatAreaProps {
@@ -75,6 +77,52 @@ export default function ChatArea({
     scrollToBottom();
   }, [messages]);
 
+  // Mark received messages as read
+  useEffect(() => {
+    const markMessagesAsRead = async () => {
+      const unreadMessages = messages.filter(
+        (msg) =>
+          typeof msg.recipient === "string"
+            ? msg.recipient === currentUser._id
+            : msg.recipient._id === currentUser._id && msg.status !== "read",
+      );
+
+      if (unreadMessages.length > 0) {
+        try {
+          await api.put("messages/mark-read", {
+            messageIds: unreadMessages.map((m) => m._id),
+          });
+
+          // Update local message status
+          setMessages((prev) =>
+            prev.map((msg) =>
+              unreadMessages.some((um) => um._id === msg._id)
+                ? { ...msg, status: "read", readAt: new Date().toISOString() }
+                : msg,
+            ),
+          );
+
+          // Emit read receipt via socket
+          const socket = getSocket();
+          if (socket) {
+            socket.emit("mark_read", {
+              messageIds: unreadMessages.map((m) => m._id),
+              readBy: currentUser._id,
+            });
+          }
+        } catch (error) {
+          console.error("Failed to mark messages as read", error);
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      markMessagesAsRead();
+    }, 500); // Delay to avoid marking as read immediately
+
+    return () => clearTimeout(timer);
+  }, [messages, currentUser._id]);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -124,8 +172,26 @@ export default function ChatArea({
 
     socket.on("receive_message", handleReceiveMessage);
 
+    // Handle read receipts
+    const handleMessagesRead = (data: any) => {
+      const { messageIds, readBy } = data;
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          messageIds.includes(msg._id)
+            ? { ...msg, status: "read", readAt: new Date().toISOString() }
+            : msg,
+        ),
+      );
+
+      console.log(`Messages read by ${readBy}:`, messageIds);
+    };
+
+    socket.on("messages_read", handleMessagesRead);
+
     return () => {
       socket.off("receive_message", handleReceiveMessage);
+      socket.off("messages_read", handleMessagesRead);
     };
   }, [selectedFriend, currentUser]);
 
@@ -238,7 +304,7 @@ export default function ChatArea({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#e5ddd5] min-w-0">
-      {/* WhatsApp-style Header */}
+      {/* Lets chat-style Header */}
       <div className="bg-[#f0f2f5] border-b border-gray-300 flex items-center px-3 md:px-4 py-2 md:py-3 shadow-sm">
         {/* Back button - visible on mobile only */}
         {onBack && (
@@ -264,7 +330,7 @@ export default function ChatArea({
         </div>
       </div>
 
-      {/* Messages Area - WhatsApp style background pattern */}
+      {/* Messages Area - Lets chat style background pattern */}
       <div
         className="flex-1 overflow-y-auto p-2 md:p-4 space-y-2"
         style={{
@@ -310,18 +376,45 @@ export default function ChatArea({
                       })}
                     </span>
                     {isMe && (
-                      <svg
-                        width="16"
-                        height="11"
-                        viewBox="0 0 16 11"
-                        fill="none"
-                        className="text-gray-500"
-                      >
-                        <path
-                          d="M11.071 0.928L4.293 7.706L1.707 5.121L0.293 6.535L4.293 10.535L12.485 2.343L11.071 0.928Z"
-                          fill="currentColor"
-                        />
-                      </svg>
+                      <div className="flex items-center">
+                        {/* Single or Double Tick */}
+                        <svg
+                          width="16"
+                          height="11"
+                          viewBox="0 0 16 11"
+                          fill="none"
+                          className={`${
+                            msg.status === "read"
+                              ? "text-blue-500"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          <path
+                            d="M11.071 0.928L4.293 7.706L1.707 5.121L0.293 6.535L4.293 10.535L12.485 2.343L11.071 0.928Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                        {/* Second Tick for Delivered/Read */}
+                        {(msg.status === "delivered" ||
+                          msg.status === "read") && (
+                          <svg
+                            width="16"
+                            height="11"
+                            viewBox="0 0 16 11"
+                            fill="none"
+                            className={`-ml-2 ${
+                              msg.status === "read"
+                                ? "text-blue-500"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            <path
+                              d="M11.071 0.928L4.293 7.706L1.707 5.121L0.293 6.535L4.293 10.535L12.485 2.343L11.071 0.928Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -332,7 +425,7 @@ export default function ChatArea({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* WhatsApp-style Input Area */}
+      {/* Lets chat-style Input Area */}
       <form
         onSubmit={handleSendMessage}
         className="bg-[#f0f2f5] px-2 md:px-4 py-2 flex items-center space-x-2"

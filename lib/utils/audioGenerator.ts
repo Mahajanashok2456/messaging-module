@@ -1,6 +1,6 @@
 /**
  * Audio tone generator for notification sounds
- * Creates simple beep tones similar to WhatsApp
+ * Creates simple beep tones similar to Lets chat
  */
 
 type AudioContext = typeof window.AudioContext;
@@ -62,7 +62,7 @@ export const playTone = (
 };
 
 /**
- * Play WhatsApp-like message received notification
+ * Play Lets chat-like message received notification
  * Two tones: ascending
  */
 export const playMessageReceivedTone = (volume: number = 0.3) => {
@@ -71,7 +71,7 @@ export const playMessageReceivedTone = (volume: number = 0.3) => {
 };
 
 /**
- * Play WhatsApp-like message sent notification
+ * Play Lets chat-like message sent notification
  * Single tone: mid-high
  */
 export const playMessageSentTone = (volume: number = 0.3) => {

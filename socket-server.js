@@ -174,6 +174,24 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handle marking messages as read
+  socket.on("mark_read", (data) => {
+    try {
+      const { messageIds, readBy } = data;
+      
+      // Broadcast read receipts to the sender's room (other devices + original sender)
+      io.to(readBy).emit("messages_read", {
+        messageIds,
+        readBy,
+        timestamp: new Date().toISOString(),
+      });
+      
+      console.log(`Messages marked as read by user: ${readBy}`);
+    } catch (error) {
+      console.error("Error handling mark_read:", error);
+    }
+  });
+
   // Handle friend request notifications
   socket.on("friend_request_sent", (data) => {
     const { recipientId, sender } = data;

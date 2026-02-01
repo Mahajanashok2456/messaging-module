@@ -281,10 +281,10 @@ export default function Sidebar({
 
   return (
     <div className="w-full md:w-80 h-full bg-white border-b md:border-b-0 md:border-r border-gray-300 flex flex-col shadow-lg z-10">
-      {/* Header / Navigation - WhatsApp style */}
+      {/* Header / Navigation - Lets chat style */}
       <div className="bg-[#008069] p-3 md:p-4">
         <div className="flex items-center justify-between text-white mb-2 md:mb-3">
-          <h2 className="text-lg md:text-xl font-medium">WhatsApp</h2>
+          <h2 className="text-lg md:text-xl font-medium">Lets chat</h2>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowSoundSettings(!showSoundSettings)}

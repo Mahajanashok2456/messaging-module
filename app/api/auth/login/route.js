@@ -8,8 +8,8 @@ import { sanitizeEmail } from "@/lib/utils/sanitize";
 
 export async function POST(req) {
   try {
-    // Apply rate limiting
-    const rateLimitResult = await rateLimit(5, 15 * 60 * 1000)(req);
+    // Apply rate limiting (increased limit for login: 20 attempts per 15 minutes)
+    const rateLimitResult = await rateLimit(20, 15 * 60 * 1000)(req);
     if (rateLimitResult) return rateLimitResult;
 
     await connectDB();

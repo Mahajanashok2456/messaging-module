@@ -190,17 +190,17 @@ export default function ChatArea({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#e5ddd5]">
+    <div className="flex-1 flex flex-col h-full bg-[#e5ddd5] min-w-0">
       {/* WhatsApp-style Header */}
-      <div className="bg-[#f0f2f5] border-b border-gray-300 flex items-center px-4 py-3 shadow-sm">
-        <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold mr-3">
+      <div className="bg-[#f0f2f5] border-b border-gray-300 flex items-center px-3 md:px-4 py-2 md:py-3 shadow-sm">
+        <div className="w-8 md:w-10 h-8 md:h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold mr-2 md:mr-3 flex-shrink-0">
           {selectedFriend.username.charAt(0).toUpperCase()}
         </div>
-        <div className="flex-1">
-          <h3 className="text-base font-medium text-gray-900">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm md:text-base font-medium text-gray-900 truncate">
             {selectedFriend.username}
           </h3>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 hidden sm:inline">
             tap here for contact info
           </span>
         </div>
@@ -208,7 +208,7 @@ export default function ChatArea({
 
       {/* Messages Area - WhatsApp style background pattern */}
       <div
-        className="flex-1 overflow-y-auto p-4 space-y-2"
+        className="flex-1 overflow-y-auto p-2 md:p-4 space-y-2"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d9d9d9' fill-opacity='0.2'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
         }}
@@ -232,7 +232,7 @@ export default function ChatArea({
                 className={`flex ${isMe ? "justify-end" : "justify-start"} mb-2`}
               >
                 <div
-                  className={`max-w-xs md:max-w-md px-3 py-2 rounded-lg shadow-md relative ${
+                  className={`max-w-[calc(100vw-2rem)] sm:max-w-xs md:max-w-md px-3 py-2 rounded-lg shadow-md relative text-sm md:text-base ${
                     isMe
                       ? "bg-[#dcf8c6] text-gray-900"
                       : "bg-white text-gray-900"
@@ -277,21 +277,21 @@ export default function ChatArea({
       {/* WhatsApp-style Input Area */}
       <form
         onSubmit={handleSendMessage}
-        className="bg-[#f0f2f5] px-4 py-2 flex items-center space-x-2"
+        className="bg-[#f0f2f5] px-2 md:px-4 py-2 flex items-center space-x-2"
       >
         <input
           type="text"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           placeholder="Type a message"
-          className="flex-1 bg-white border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
+          className="flex-1 bg-white border border-gray-300 rounded-full px-3 md:px-4 py-2 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
         />
         <button
           type="submit"
           disabled={!newMessage.trim()}
-          className="bg-[#25D366] text-white rounded-full p-2.5 hover:bg-[#128C7E] disabled:opacity-50 disabled:bg-gray-400 transition-colors shadow-md"
+          className="bg-[#25D366] text-white rounded-full p-2 md:p-2.5 hover:bg-[#128C7E] disabled:opacity-50 disabled:bg-gray-400 transition-colors shadow-md flex-shrink-0"
         >
-          <Send size={18} />
+          <Send size={16} className="md:w-5 md:h-5" />
         </button>
       </form>
     </div>

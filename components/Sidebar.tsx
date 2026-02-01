@@ -277,11 +277,11 @@ export default function Sidebar({
   };
 
   return (
-    <div className="w-80 bg-white border-r border-gray-300 flex flex-col h-full shadow-lg z-10">
+    <div className="w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-gray-300 flex flex-col h-full shadow-lg z-10">
       {/* Header / Navigation - WhatsApp style */}
-      <div className="bg-[#008069] p-4">
-        <div className="flex items-center justify-between text-white mb-3">
-          <h2 className="text-xl font-medium">WhatsApp</h2>
+      <div className="bg-[#008069] p-3 md:p-4">
+        <div className="flex items-center justify-between text-white mb-2 md:mb-3">
+          <h2 className="text-lg md:text-xl font-medium">WhatsApp</h2>
           <button
             onClick={handleLogout}
             className="p-2 hover:bg-white/10 rounded-full transition-colors"
@@ -291,10 +291,10 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="flex space-x-2 bg-white/10 rounded-full p-1">
+        <div className="flex space-x-1 md:space-x-2 bg-white/10 rounded-full p-1">
           <button
             onClick={() => setView("chats")}
-            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`flex-1 py-1 md:py-1.5 rounded-full text-xs md:text-sm font-medium transition-all ${
               view === "chats"
                 ? "bg-white text-[#008069]"
                 : "text-white/90 hover:text-white"
@@ -305,7 +305,7 @@ export default function Sidebar({
 
           <button
             onClick={() => setView("friends")}
-            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`flex-1 py-1 md:py-1.5 rounded-full text-xs md:text-sm font-medium transition-all ${
               view === "friends"
                 ? "bg-white text-[#008069]"
                 : "text-white/90 hover:text-white"
@@ -316,7 +316,7 @@ export default function Sidebar({
 
           <button
             onClick={() => setView("requests")}
-            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all relative ${
+            className={`flex-1 py-1 md:py-1.5 rounded-full text-xs md:text-sm font-medium transition-all relative ${
               view === "requests"
                 ? "bg-white text-[#008069]"
                 : "text-white/90 hover:text-white"
@@ -332,7 +332,7 @@ export default function Sidebar({
 
           <button
             onClick={() => setView("search")}
-            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`flex-1 py-1 md:py-1.5 rounded-full text-xs md:text-sm font-medium transition-all ${
               view === "search"
                 ? "bg-white text-[#008069]"
                 : "text-white/90 hover:text-white"
@@ -373,16 +373,16 @@ export default function Sidebar({
                     <li
                       key={chat._id}
                       onClick={() => handleChatSelect(chat)}
-                      className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors flex items-center space-x-3 ${
+                      className={`px-3 md:px-4 py-2 md:py-3 cursor-pointer hover:bg-gray-50 transition-colors flex items-center space-x-2 md:space-x-3 ${
                         selectedFriendId === otherUser._id ? "bg-gray-100" : ""
                       }`}
                     >
-                      <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold text-lg flex-shrink-0">
+                      <div className="w-10 md:w-12 h-10 md:h-12 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold text-base md:text-lg flex-shrink-0">
                         {otherUser.username.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline">
-                          <p className="text-base font-medium text-gray-900 truncate">
+                          <p className="text-sm md:text-base font-medium text-gray-900 truncate">
                             {otherUser.username}
                           </p>
                           {chat.updatedAt && (
@@ -391,7 +391,7 @@ export default function Sidebar({
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 truncate mt-0.5">
+                        <p className="text-xs md:text-sm text-gray-500 truncate mt-0.5">
                           {chat.lastMessage || "Start chatting!"}
                         </p>
                       </div>

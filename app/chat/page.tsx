@@ -44,15 +44,17 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
-      <Sidebar 
-        onSelectFriend={setSelectedFriend} 
-        selectedFriendId={selectedFriend?.id} 
-      />
+    <div className="flex h-screen bg-white overflow-hidden flex-col md:flex-row">
+      <div className="w-full md:w-80 h-auto md:h-full border-b md:border-b-0 md:border-r">
+        <Sidebar 
+          onSelectFriend={setSelectedFriend} 
+          selectedFriendId={selectedFriend?.id} 
+        />
+      </div>
       {selectedFriend ? (
         <ChatArea selectedFriend={selectedFriend} currentUser={user} />
       ) : (
-        <div className="flex-1 flex items-center justify-center bg-gray-50 text-gray-500">
+        <div className="hidden md:flex flex-1 items-center justify-center bg-gray-50 text-gray-500">
           <p>Select a friend to start chatting</p>
         </div>
       )}

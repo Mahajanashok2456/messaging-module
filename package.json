@@ -15,6 +15,7 @@
     "clsx": "^2.0.0",
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
+    "express": "^4.22.1",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.300.0",
     "mongoose": "^8.19.1",

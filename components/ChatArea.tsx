@@ -72,6 +72,32 @@ export default function ChatArea({
     }
   }, [selectedFriend]);
 
+  // Monitor socket connection status
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) {
+      console.warn("Socket not available");
+      return;
+    }
+
+    const handleSocketConnect = () => {
+      console.log("Socket reconnected, rejoining rooms...");
+      joinUserRoom();
+    };
+
+    const handleSocketDisconnect = () => {
+      console.log("Socket disconnected, will attempt to reconnect");
+    };
+
+    socket.on("connect", handleSocketConnect);
+    socket.on("disconnect", handleSocketDisconnect);
+
+    return () => {
+      socket.off("connect", handleSocketConnect);
+      socket.off("disconnect", handleSocketDisconnect);
+    };
+  }, [currentUser]);
+
   // Auto-scroll when messages change
   useEffect(() => {
     scrollToBottom();
@@ -83,9 +109,7 @@ export default function ChatArea({
       // Only mark received messages (where currentUser is recipient) as read
       const unreadMessages = messages.filter((msg) => {
         const recipientId =
-          typeof msg.recipient === "string"
-            ? msg.recipient
-            : msg.recipient._id;
+          typeof msg.recipient === "string" ? msg.recipient : msg.recipient._id;
         return recipientId === currentUser._id && msg.status !== "read";
       });
 
@@ -130,6 +154,8 @@ export default function ChatArea({
     if (!socket) return;
 
     const handleReceiveMessage = (message: any) => {
+      console.log("Received message via socket:", message);
+
       // Check if message belongs to current chat
       const senderId =
         message.senderId ||
@@ -147,24 +173,33 @@ export default function ChatArea({
         (senderId === selectedFriend.id && recipientId === currentUser._id) ||
         (senderId === currentUser._id && recipientId === selectedFriend.id)
       ) {
+        console.log("Message matches current chat, adding to list");
+
         // Don't add duplicate messages
         setMessages((prev) => {
-          const exists = prev.some(
-            (msg) => msg._id === message.messageId || msg._id === message._id,
-          );
-          if (exists) return prev;
+          const messageId = message.messageId || message._id;
+          const exists = prev.some((msg) => msg._id === messageId);
+          if (exists) {
+            console.log("Message already exists, skipping duplicate");
+            return prev;
+          }
 
-          return [
-            ...prev,
-            {
-              _id: message.messageId || message._id,
-              sender: senderId,
-              recipient: recipientId,
-              content: message.content,
-              timestamp: message.timestamp || new Date().toISOString(),
-              status: "delivered",
-            },
-          ];
+          const newMsg: Message = {
+            _id: messageId,
+            sender:
+              typeof message.sender === "string"
+                ? { _id: senderId, username: "" }
+                : message.sender || senderId,
+            recipient:
+              typeof message.recipient === "string"
+                ? { _id: recipientId, username: "" }
+                : message.recipient || recipientId,
+            content: message.content,
+            timestamp: message.timestamp || new Date().toISOString(),
+            status: message.status || "delivered",
+          };
+
+          return [...prev, newMsg];
         });
         scrollToBottom();
 
@@ -196,7 +231,7 @@ export default function ChatArea({
       socket.off("receive_message", handleReceiveMessage);
       socket.off("messages_read", handleMessagesRead);
     };
-  }, [selectedFriend, currentUser]);
+  }, [selectedFriend.id, currentUser._id]);
 
   const fetchMessages = async () => {
     setLoading(true);
@@ -268,6 +303,7 @@ export default function ChatArea({
       });
 
       const savedMessage = response.data;
+      console.log("Message saved, server response:", savedMessage);
 
       // Update the temporary message with real data from server
       setMessages((prev) =>
@@ -279,7 +315,7 @@ export default function ChatArea({
                 recipient: savedMessage.recipient,
                 content: savedMessage.content,
                 timestamp: savedMessage.timestamp,
-                status: savedMessage.status || "sent",
+                status: "sent",
               }
             : msg,
         ),
@@ -288,6 +324,14 @@ export default function ChatArea({
       // Send real-time notification via Socket.IO
       const socket = getSocket();
       if (socket) {
+        console.log("Emitting send_message via socket with:", {
+          messageId: savedMessage._id,
+          senderId: currentUser._id,
+          recipientId: selectedFriend.id,
+          content: messageContent,
+          timestamp: savedMessage.timestamp,
+        });
+
         socket.emit("send_message", {
           messageId: savedMessage._id,
           senderId: currentUser._id,
@@ -295,6 +339,8 @@ export default function ChatArea({
           content: messageContent,
           timestamp: savedMessage.timestamp,
         });
+      } else {
+        console.warn("Socket not available, message sent via API only");
       }
     } catch (error: any) {
       console.error("Failed to send message", error);

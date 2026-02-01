@@ -9,9 +9,15 @@ console.log("Connecting to Socket.io server:", SOCKET_URL);
 let socket: Socket | null = null;
 
 export const getSocket = (): Socket | null => {
-  if (socket) return socket;
+  if (typeof window === "undefined") return null;
 
-  if (typeof window !== "undefined") {
+  // Return existing socket if it's already connected or connecting
+  if (socket && (socket.connected || socket.connecting)) {
+    return socket;
+  }
+
+  // Create new socket if none exists
+  if (!socket) {
     const token = localStorage.getItem("token");
     if (token) {
       socket = io(SOCKET_URL, {
@@ -21,19 +27,21 @@ export const getSocket = (): Socket | null => {
         transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 10,
+        path: "/socket.io/",
       });
 
       socket.on("connect", () => {
-        console.log("Socket connected:", socket?.id);
+        console.log("✅ Socket connected:", socket?.id);
       });
 
-      socket.on("disconnect", () => {
-        console.log("Socket disconnected");
+      socket.on("disconnect", (reason) => {
+        console.log("⚠️ Socket disconnected:", reason);
       });
 
       socket.on("connect_error", (error) => {
-        console.error("Socket connection error:", error.message);
+        console.error("❌ Socket connection error:", error.message);
       });
 
       return socket;

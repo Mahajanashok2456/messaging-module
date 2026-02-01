@@ -83,8 +83,9 @@ io.on("connection", (socket) => {
       const { messageId, senderId, recipientId, content, timestamp } = data;
 
       // Validate required fields
-      if (!senderId || !recipientId || !content) {
+      if (!messageId || !senderId || !recipientId || !content) {
         console.error("Missing required fields:", {
+          messageId,
           senderId,
           recipientId,
           content,
@@ -92,7 +93,7 @@ io.on("connection", (socket) => {
         return;
       }
 
-      console.log("Message received via socket:", {
+      console.log("Message broadcast via socket:", {
         messageId,
         senderId,
         recipientId,
@@ -100,76 +101,38 @@ io.on("connection", (socket) => {
         timestamp,
       });
 
-      // Save message to database
-      const newMessage = new Message({
-        sender: new mongoose.Types.ObjectId(senderId),
-        recipient: new mongoose.Types.ObjectId(recipientId),
-        content,
-        timestamp: new Date(timestamp),
-      });
-
-      await newMessage.save();
-      console.log(`✅ Message saved: ${newMessage._id}`);
-
-      // Update or create chat for sender
-      await Chat.findOneAndUpdate(
-        {
-          participants: { $all: [senderId, recipientId] },
-        },
-        {
-          $set: {
-            lastMessage: content,
-            updatedAt: new Date(),
-          },
-          $setOnInsert: {
-            participants: [senderId, recipientId],
-          },
-        },
-        { upsert: true, new: true },
-      );
-
-      // Update or create chat for recipient
-      await Chat.findOneAndUpdate(
-        {
-          participants: { $all: [recipientId, senderId] },
-        },
-        {
-          $set: {
-            lastMessage: content,
-            updatedAt: new Date(),
-          },
-          $setOnInsert: {
-            participants: [recipientId, senderId],
-          },
-        },
-        { upsert: true, new: true },
-      );
-
+      // Message is already saved by API - just broadcast it
       // Emit to recipient's room (all their devices)
       io.to(recipientId).emit("receive_message", {
         _id: messageId,
+        messageId: messageId,
         senderId,
+        sender: senderId,
         recipientId,
+        recipient: recipientId,
         content,
-        timestamp,
-        isRead: false,
+        timestamp: timestamp || new Date().toISOString(),
+        status: "delivered",
       });
 
       // Also emit to sender's other devices (except the sending one)
       socket.to(senderId).emit("receive_message", {
         _id: messageId,
+        messageId: messageId,
         senderId,
+        sender: senderId,
         recipientId,
+        recipient: recipientId,
         content,
-        timestamp,
-        isRead: false,
+        timestamp: timestamp || new Date().toISOString(),
+        status: "delivered",
       });
 
       console.log(
-        `Message ${messageId} sent to user:${recipientId} and sender's other devices`,
+        `✅ Message broadcast: ${messageId} to recipient(${recipientId}) and sender's other devices`,
       );
     } catch (error) {
-      console.error("Error handling message:", error);
+      console.error("Error handling send_message broadcast:", error);
       socket.emit("message_error", { error: error.message });
     }
   });

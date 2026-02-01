@@ -66,7 +66,12 @@ app.get("/", (req, res) => {
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // Join user's personal room
+  // Join user's personal room (for receiving messages on all devices)
+  socket.on("join_user_room", (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined personal room (socket: ${socket.id})`);
+  });
+
   socket.on("join_room", (userId) => {
     socket.join(userId);
     console.log(`User ${userId} joined room`);
@@ -86,12 +91,10 @@ io.on("connection", (socket) => {
 
       // Save message to database
       const newMessage = new Message({
-        _id: messageId,
-        senderId,
-        recipientId,
+        sender: senderId,
+        recipient: recipientId,
         content,
         timestamp: new Date(timestamp),
-        isRead: false,
       });
 
       await newMessage.save();
@@ -130,7 +133,7 @@ io.on("connection", (socket) => {
         { upsert: true, new: true },
       );
 
-      // Emit to recipient's room
+      // Emit to recipient's room (all their devices)
       io.to(recipientId).emit("receive_message", {
         _id: messageId,
         senderId,
@@ -140,7 +143,17 @@ io.on("connection", (socket) => {
         isRead: false,
       });
 
-      console.log(`Message ${messageId} sent to user:${recipientId}`);
+      // Also emit to sender's other devices (except the sending one)
+      socket.to(senderId).emit("receive_message", {
+        _id: messageId,
+        senderId,
+        recipientId,
+        content,
+        timestamp,
+        isRead: false,
+      });
+
+      console.log(`Message ${messageId} sent to user:${recipientId} and sender's other devices`);
     } catch (error) {
       console.error("Error handling message:", error);
       socket.emit("message_error", { error: error.message });

@@ -38,6 +38,32 @@ export default function ChatArea({
       fetchMessages();
       joinChat();
       joinUserRoom();
+
+      // Set up periodic sync every 30 seconds to catch messages from other devices
+      const syncInterval = setInterval(async () => {
+        try {
+          const response = await api.get(
+            `messages/history/${selectedFriend.id}`,
+          );
+          const newMessages = response.data.messages || response.data || [];
+          
+          // Only update if there are new messages
+          setMessages((prev) => {
+            const prevIds = new Set(prev.map((m) => m._id));
+            const hasNew = newMessages.some((m: any) => !prevIds.has(m._id));
+            
+            if (hasNew) {
+              console.log("Syncing messages from other devices...");
+              return newMessages;
+            }
+            return prev;
+          });
+        } catch (error) {
+          console.error("Failed to sync messages", error);
+        }
+      }, 30000); // Sync every 30 seconds
+
+      return () => clearInterval(syncInterval);
     }
   }, [selectedFriend]);
 
@@ -58,11 +84,12 @@ export default function ChatArea({
           ? message.recipient
           : message.recipient?._id);
 
+      // Add message if it's for the current chat (either direction)
       if (
         (senderId === selectedFriend.id && recipientId === currentUser._id) ||
         (senderId === currentUser._id && recipientId === selectedFriend.id)
       ) {
-        // Don't add duplicate messages (sender already has it from API response)
+        // Don't add duplicate messages
         setMessages((prev) => {
           const exists = prev.some(
             (msg) => msg._id === message.messageId || msg._id === message._id,
@@ -95,7 +122,7 @@ export default function ChatArea({
     setLoading(true);
     try {
       const response = await api.get(
-        `/api/messages/history/${selectedFriend.id}`,
+        `messages/history/${selectedFriend.id}`,
       );
       setMessages(response.data.messages || response.data || []);
       scrollToBottom();

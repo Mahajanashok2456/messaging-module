@@ -40,15 +40,19 @@ export default function ChatPage() {
   }, [router]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        Loading...
+      </div>
+    );
   }
 
   return (
     <div className="flex h-screen bg-white overflow-hidden flex-col md:flex-row">
       <div className="w-full md:w-80 h-auto md:h-full border-b md:border-b-0 md:border-r">
-        <Sidebar 
-          onSelectFriend={setSelectedFriend} 
-          selectedFriendId={selectedFriend?.id} 
+        <Sidebar
+          onSelectFriend={setSelectedFriend}
+          selectedFriendId={selectedFriend?.id}
         />
       </div>
       {selectedFriend ? (

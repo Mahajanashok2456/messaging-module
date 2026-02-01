@@ -67,8 +67,12 @@ export default function LoginPage() {
           <div className="mx-auto h-16 md:h-20 w-16 md:w-20 rounded-full bg-white shadow-lg flex items-center justify-center mb-4 md:mb-6">
             <MessageCircle className="h-10 md:h-12 w-10 md:w-12 text-[#25D366]" />
           </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">Welcome Back</h2>
-          <p className="text-white/80 text-xs md:text-sm">Sign in to continue messaging</p>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">
+            Welcome Back
+          </h2>
+          <p className="text-white/80 text-xs md:text-sm">
+            Sign in to continue messaging
+          </p>
         </div>
 
         {/* Login Form Card */}
@@ -140,7 +144,9 @@ export default function LoginPage() {
             {/* Error Message */}
             {error && (
               <div className="bg-red-50 border-l-4 border-red-500 p-3 md:p-4 rounded-lg">
-                <p className="text-red-700 text-xs md:text-sm font-medium">{error}</p>
+                <p className="text-red-700 text-xs md:text-sm font-medium">
+                  {error}
+                </p>
               </div>
             )}
 

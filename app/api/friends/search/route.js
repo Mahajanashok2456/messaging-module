@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import User from "@/lib/db/User";
 import { connectDB } from "@/lib/db/db";
 import { verifyAuth } from "@/lib/middleware/authNext";
+import { rateLimit } from "@/lib/middleware/rateLimiter";
+import { sanitizeInput } from "@/lib/utils/sanitize";
 
 export async function GET(req) {
   try {
+    // Apply rate limiting (30 searches per 15 minutes)
+    const rateLimitResult = await rateLimit(30, 15 * 60 * 1000)(req);
+    if (rateLimitResult) return rateLimitResult;
+
     await connectDB();
 
     const user = await verifyAuth(req);
@@ -13,11 +19,20 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const query = searchParams.get("query");
+    let query = searchParams.get("query");
 
     if (!query) {
       return NextResponse.json(
         { message: "Query parameter is required" },
+        { status: 400 },
+      );
+    }
+
+    // Sanitize search query
+    query = sanitizeInput(query);
+    if (!query || query.trim().length === 0) {
+      return NextResponse.json(
+        { message: "Invalid search query" },
         { status: 400 },
       );
     }
@@ -90,6 +105,10 @@ export async function GET(req) {
 
     return NextResponse.json(transformedUsers, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    console.error("Search error:", error);
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

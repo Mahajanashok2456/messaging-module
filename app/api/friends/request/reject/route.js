@@ -13,13 +13,25 @@ export async function PUT(req) {
     }
 
     const { requestId } = await req.json();
+
+    if (!requestId) {
+      return NextResponse.json(
+        { message: "requestId is required" },
+        { status: 400 },
+      );
+    }
+
     const userId = user._id;
 
     const userDoc = await User.findById(userId);
 
-    // Find the request by ObjectId
+    if (!userDoc) {
+      return NextResponse.json({ message: "User not found" }, { status: 404 });
+    }
+
+    // Find the request by its _id in the friendRequests array
     const requestIndex = userDoc.friendRequests.findIndex(
-      (request) => request._id.toString() === requestId,
+      (request) => request._id.toString() === requestId.toString(),
     );
 
     if (requestIndex === -1) {
@@ -31,26 +43,24 @@ export async function PUT(req) {
 
     const requesterId = userDoc.friendRequests[requestIndex].from;
 
-    // Remove the request
-    userDoc.friendRequests.splice(requestIndex, 1);
-    await userDoc.save();
+    // Remove the request from both users using atomic operations
+    await User.findByIdAndUpdate(userId, {
+      $pull: { friendRequests: { _id: requestId } },
+    });
 
-    // Remove from sender's sent requests
-    const requester = await User.findById(requesterId);
-    const sentRequestIndex = requester.sentRequests.findIndex(
-      (req) => req.to.toString() === userId.toString(),
-    );
-
-    if (sentRequestIndex !== -1) {
-      requester.sentRequests.splice(sentRequestIndex, 1);
-      await requester.save();
-    }
+    await User.findByIdAndUpdate(requesterId, {
+      $pull: { sentRequests: { to: userId } },
+    });
 
     return NextResponse.json(
       { message: "Friend request rejected" },
       { status: 200 },
     );
   } catch (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    console.error("Reject friend request error:", error);
+    return NextResponse.json(
+      { message: error.message || "Internal server error" },
+      { status: 500 },
+    );
   }
 }

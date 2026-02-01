@@ -1,33 +1,28 @@
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 import User from "@/lib/db/User";
 import { connectDB } from "@/lib/db/db";
+import { rateLimit } from "@/lib/middleware/rateLimiter";
+import {
+  sanitizeInput,
+  sanitizeEmail,
+  validatePassword,
+} from "@/lib/utils/sanitize";
+import { generateTokenPair } from "@/lib/utils/jwt";
 import AppError from "@/lib/utils/AppError";
-
-// Input sanitization helper
-const sanitizeInput = (input) => {
-  if (typeof input !== "string") return input;
-  return input.trim().replace(/[<>"'&]/g, "");
-};
-
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: "24h",
-    issuer: "mess-app",
-    audience: "mess-app-users",
-  });
-};
 
 export async function POST(req) {
   try {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit(3, 60 * 60 * 1000)(req);
+    if (rateLimitResult) return rateLimitResult;
+
     await connectDB();
 
     let { username, email, password } = await req.json();
 
     // Sanitize inputs
     username = sanitizeInput(username);
-    email = sanitizeInput(email);
+    email = sanitizeEmail(email);
 
     // Validate input
     if (!username || !email || !password) {
@@ -37,31 +32,19 @@ export async function POST(req) {
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!email) {
       return NextResponse.json(
         { message: "Please provide a valid email address" },
         { status: 400 },
       );
     }
 
-    // Additional validation for password strength
-    if (password.length < 8) {
-      return NextResponse.json(
-        { message: "Password must be at least 8 characters long" },
-        { status: 400 },
-      );
-    }
-
-    // Check password complexity
-    const passwordRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
-    if (!passwordRegex.test(password)) {
+    // Validate password strength
+    if (!validatePassword(password)) {
       return NextResponse.json(
         {
           message:
-            "Password must contain uppercase, lowercase, number, and special character",
+            "Password must be at least 8 characters with uppercase, lowercase, number, and special character",
         },
         { status: 400 },
       );
@@ -83,10 +66,12 @@ export async function POST(req) {
     const user = new User({ username, email, password });
     await user.save();
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate token pair
+    const { accessToken, refreshToken } = generateTokenPair(
+      user._id.toString(),
+    );
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         status: "success",
         data: {
@@ -95,11 +80,21 @@ export async function POST(req) {
             username: user.username,
             email: user.email,
           },
-          token,
+          accessToken,
         },
       },
       { status: 201 },
     );
+
+    // Set refresh token as httpOnly cookie
+    response.cookies.set("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    return response;
   } catch (error) {
     // Handle Mongoose validation errors
     if (error.name === "ValidationError") {
@@ -110,8 +105,9 @@ export async function POST(req) {
       );
     }
 
+    console.error("Registration error:", error);
     return NextResponse.json(
-      { message: error.message || "Internal server error" },
+      { message: "Internal server error" },
       { status: 500 },
     );
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import User from "@/lib/db/User";
 import { connectDB } from "@/lib/db/db";
-import { verifyAuth } from "@/lib/middleware/auth";
+import { verifyAuth } from "@/lib/middleware/authNext";
 
 export async function GET(req) {
   try {

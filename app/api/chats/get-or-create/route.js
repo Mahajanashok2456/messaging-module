@@ -12,10 +12,18 @@ export async function POST(req) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { recipientId } = await req.json();
+    const { recipientId, otherUserId } = await req.json();
     const senderId = user._id;
+    const targetUserId = recipientId || otherUserId;
 
-    const chat = await Chat.findOrCreateBetweenUsers(senderId, recipientId);
+    if (!targetUserId) {
+      return NextResponse.json(
+        { message: "recipientId or otherUserId is required" },
+        { status: 400 },
+      );
+    }
+
+    const chat = await Chat.findOrCreateBetweenUsers(senderId, targetUserId);
 
     return NextResponse.json(
       {

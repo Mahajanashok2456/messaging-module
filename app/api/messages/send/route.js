@@ -4,9 +4,15 @@ import Chat from "@/lib/db/Chat";
 import User from "@/lib/db/User";
 import { connectDB } from "@/lib/db/db";
 import { verifyAuth } from "@/lib/middleware/authNext";
+import { rateLimit } from "@/lib/middleware/rateLimiter";
+import { sanitizeInput } from "@/lib/utils/sanitize";
 
 export async function POST(req) {
   try {
+    // Apply rate limiting (50 messages per 15 minutes)
+    const rateLimitResult = await rateLimit(50, 15 * 60 * 1000)(req);
+    if (rateLimitResult) return rateLimitResult;
+
     await connectDB();
 
     const user = await verifyAuth(req);
@@ -21,6 +27,15 @@ export async function POST(req) {
     if (!targetRecipientId || !content) {
       return NextResponse.json(
         { message: "recipientId and content are required" },
+        { status: 400 },
+      );
+    }
+
+    // Sanitize message content
+    const sanitizedContent = sanitizeInput(content);
+    if (!sanitizedContent || sanitizedContent.trim().length === 0) {
+      return NextResponse.json(
+        { message: "Message content cannot be empty" },
         { status: 400 },
       );
     }
@@ -51,7 +66,7 @@ export async function POST(req) {
     const message = new Message({
       sender: senderId,
       recipient: targetRecipientId,
-      content,
+      content: sanitizedContent,
     });
 
     await message.save();
@@ -66,7 +81,7 @@ export async function POST(req) {
         senderId,
         targetRecipientId,
       );
-      chat.lastMessage = content.substring(0, 50);
+      chat.lastMessage = sanitizedContent.substring(0, 50);
       chat.lastMessageTimestamp = new Date();
       chat.updatedAt = new Date();
       await chat.save();
@@ -76,6 +91,10 @@ export async function POST(req) {
 
     return NextResponse.json(message, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ message: error.message }, { status: 500 });
+    console.error("Message send error:", error);
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

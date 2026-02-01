@@ -4,18 +4,18 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
-import { 
-  User, 
-  MessageSquare, 
-  UserPlus, 
-  Search, 
-  Check, 
+import {
+  User,
+  MessageSquare,
+  UserPlus,
+  Search,
+  Check,
   X,
   Loader2,
   LogOut,
   Edit2,
   Save,
-  MoreVertical
+  MoreVertical,
 } from "lucide-react";
 
 interface Friend {
@@ -57,12 +57,15 @@ interface SidebarProps {
   selectedFriendId?: string;
 }
 
-type ViewMode = 'chats' | 'requests' | 'search' | 'friends';
+type ViewMode = "chats" | "requests" | "search" | "friends";
 
-export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarProps) {
+export default function Sidebar({
+  onSelectFriend,
+  selectedFriendId,
+}: SidebarProps) {
   const router = useRouter();
-  const [view, setView] = useState<ViewMode>('chats');
-  
+  const [view, setView] = useState<ViewMode>("chats");
+
   // Data States
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [chats, setChats] = useState<Chat[]>([]);
@@ -70,7 +73,7 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // UI States
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingFriends, setLoadingFriends] = useState(false);
@@ -85,26 +88,38 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
     fetchChats();
     fetchFriends();
     fetchRequests();
+  }, []);
 
-    // Socket Listener for real-time updates
+  // Socket Listener for real-time updates (separate effect to get latest fetchChats)
+  useEffect(() => {
     const socket = getSocket();
-    if (socket) {
-      socket.on("receive_message", (message: any) => {
-        // When a new message arrives, refresh chats to update order and last message
-        // Ideally we would optimistically update, but fetching is safer for now
+    if (!socket) return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+
+    const debouncedFetchChats = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
         fetchChats();
-      });
-      
-      socket.on("message_sent", () => {
-         fetchChats();
-      });
-    }
+      }, 300);
+    };
+
+    const handleReceiveMessage = () => {
+      // When a new message arrives, refresh chats to update order and last message
+      debouncedFetchChats();
+    };
+
+    const handleMessageSent = () => {
+      debouncedFetchChats();
+    };
+
+    socket.on("receive_message", handleReceiveMessage);
+    socket.on("message_sent", handleMessageSent);
 
     return () => {
-      if (socket) {
-        socket.off("receive_message");
-        socket.off("message_sent");
-      }
+      socket.off("receive_message", handleReceiveMessage);
+      socket.off("message_sent", handleMessageSent);
+      if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, []);
 
@@ -136,7 +151,13 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
     try {
       // Fetch active chats sorted by updatedAt
       const response = await api.get("/api/users/me/chats");
-      setChats(response.data);
+      // Deduplicate chats by chat ID
+      const uniqueChats = Array.from(
+        new Map(
+          (response.data || []).map((chat: Chat) => [chat._id, chat]),
+        ).values(),
+      );
+      setChats(uniqueChats);
     } catch (error) {
       console.error("Failed to fetch chats", error);
     } finally {
@@ -171,7 +192,9 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
   const performSearch = async (query: string) => {
     setIsSearching(true);
     try {
-      const response = await api.get(`/api/friends/search?query=${encodeURIComponent(query)}`);
+      const response = await api.get(
+        `/api/friends/search?query=${encodeURIComponent(query)}`,
+      );
       setSearchResults(response.data);
     } catch (error) {
       console.error("Failed to search users", error);
@@ -183,7 +206,7 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
   const sendFriendRequest = async (userId: string) => {
     try {
       await api.post("/api/friends/request", { recipientId: userId });
-      setSearchResults(prev => prev.filter(user => user.id !== userId));
+      setSearchResults((prev) => prev.filter((user) => user.id !== userId));
       alert("Friend request sent!");
     } catch (error: any) {
       console.error("Failed to send request", error);
@@ -191,13 +214,16 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
     }
   };
 
-  const handleRequestResponse = async (requestId: string, action: 'accept' | 'reject') => {
+  const handleRequestResponse = async (
+    requestId: string,
+    action: "accept" | "reject",
+  ) => {
     try {
       await api.put(`/api/friends/request/${action}`, { requestId });
-      
-      setRequests(prev => prev.filter(req => req.id !== requestId));
-      
-      if (action === 'accept') {
+
+      setRequests((prev) => prev.filter((req) => req.id !== requestId));
+
+      if (action === "accept") {
         fetchChats(); // Refresh chats
         fetchFriends(); // Refresh friends list
         alert("Friend request accepted!");
@@ -217,7 +243,9 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
   const handleUpdateProfile = async () => {
     if (!newName.trim()) return;
     try {
-      const response = await api.put("/api/users/profile", { username: newName });
+      const response = await api.put("/api/users/profile", {
+        username: newName,
+      });
       setCurrentUser(response.data);
       setIsEditingProfile(false);
       alert("Profile updated successfully!");
@@ -229,7 +257,7 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
 
   const getOtherParticipant = (chat: Chat) => {
     if (!currentUser) return null;
-    return chat.participants.find(p => p._id !== currentUser._id);
+    return chat.participants.find((p) => p._id !== currentUser._id);
   };
 
   const handleChatSelect = (chat: Chat) => {
@@ -238,87 +266,88 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
       onSelectFriend({
         id: otherUser._id,
         username: otherUser.username,
-        email: otherUser.email
+        email: otherUser.email,
       });
     }
   };
-  
+
   const handleUserSelectFromSearch = (user: SearchResult) => {
-      // Do not allow selecting non-friends
-      // We could prompt to add friend, but UI handles that with button
-  }
+    // Do not allow selecting non-friends
+    // We could prompt to add friend, but UI handles that with button
+  };
 
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full shadow-sm z-10">
-      {/* Header / Navigation */}
-      <div className="p-2 border-b border-gray-200 bg-gray-50">
-        <div className="flex justify-around items-center bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+    <div className="w-80 bg-white border-r border-gray-300 flex flex-col h-full shadow-lg z-10">
+      {/* Header / Navigation - WhatsApp style */}
+      <div className="bg-[#008069] p-4">
+        <div className="flex items-center justify-between text-white mb-3">
+          <h2 className="text-xl font-medium">WhatsApp</h2>
           <button
-            onClick={() => setView('chats')}
-            className={`flex-1 flex items-center justify-center py-2 rounded-md text-sm font-medium transition-colors ${
-              view === 'chats' 
-                ? "bg-indigo-100 text-indigo-700" 
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            onClick={handleLogout}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            title="Logout"
+          >
+            <LogOut size={20} />
+          </button>
+        </div>
+
+        <div className="flex space-x-2 bg-white/10 rounded-full p-1">
+          <button
+            onClick={() => setView("chats")}
+            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all ${
+              view === "chats"
+                ? "bg-white text-[#008069]"
+                : "text-white/90 hover:text-white"
             }`}
           >
-            <MessageSquare size={18} className="mr-2" />
             Chats
           </button>
-          
+
           <button
-            onClick={() => setView('friends')} // New view
-            className={`flex-1 flex items-center justify-center py-2 rounded-md text-sm font-medium transition-colors ${
-              view === 'friends' 
-                ? "bg-indigo-100 text-indigo-700" 
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            onClick={() => setView("friends")}
+            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all ${
+              view === "friends"
+                ? "bg-white text-[#008069]"
+                : "text-white/90 hover:text-white"
             }`}
-            title="All Friends"
           >
-            <User size={18} className="mr-2" />
             Friends
           </button>
-          
+
           <button
-            onClick={() => setView('requests')}
-            className={`flex-1 flex items-center justify-center py-2 rounded-md text-sm font-medium transition-colors relative ${
-              view === 'requests' 
-                ? "bg-indigo-100 text-indigo-700" 
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            onClick={() => setView("requests")}
+            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all relative ${
+              view === "requests"
+                ? "bg-white text-[#008069]"
+                : "text-white/90 hover:text-white"
             }`}
           >
-            <UserPlus size={18} className="mr-2" />
             Requests
             {requests.length > 0 && (
-              <span className="absolute top-1 right-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-[#25D366] text-white text-xs flex items-center justify-center font-semibold">
+                {requests.length}
+              </span>
             )}
           </button>
 
           <button
-            onClick={() => setView('search')}
-            className={`flex-1 flex items-center justify-center py-2 rounded-md text-sm font-medium transition-colors ${
-              view === 'search' 
-                ? "bg-indigo-100 text-indigo-700" 
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            onClick={() => setView("search")}
+            className={`flex-1 py-1.5 rounded-full text-sm font-medium transition-all ${
+              view === "search"
+                ? "bg-white text-[#008069]"
+                : "text-white/90 hover:text-white"
             }`}
           >
-            <Search size={18} className="mr-2" />
             Search
           </button>
         </div>
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        
+      <div className="flex-1 overflow-y-auto bg-white">
         {/* VIEW: CHATS */}
-        {view === 'chats' && (
+        {view === "chats" && (
           <div>
-            <div className="p-3 bg-gray-50 border-b border-gray-100">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Recent Chats
-              </h3>
-            </div>
-            
             {loadingChats ? (
               <div className="flex justify-center items-center p-8 text-gray-400">
                 <Loader2 className="animate-spin mr-2" /> Loading...
@@ -327,44 +356,43 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
               <div className="p-8 text-center text-gray-500 flex flex-col items-center">
                 <MessageSquare size={48} className="text-gray-300 mb-2" />
                 <p>No active chats.</p>
-                <button 
-                  onClick={() => setView('search')}
-                  className="mt-4 text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                <button
+                  onClick={() => setView("search")}
+                  className="mt-4 text-[#008069] hover:text-[#006654] text-sm font-medium"
                 >
                   Start a conversation
                 </button>
               </div>
             ) : (
-              <ul>
+              <ul className="divide-y divide-gray-100">
                 {chats.map((chat) => {
                   const otherUser = getOtherParticipant(chat);
                   if (!otherUser) return null;
-                  
+
                   return (
                     <li
                       key={chat._id}
                       onClick={() => handleChatSelect(chat)}
-                      className={`p-4 cursor-pointer hover:bg-gray-50 border-b border-gray-100 transition-colors flex items-center space-x-3 ${
-                        selectedFriendId === otherUser._id ? "bg-indigo-50 border-l-4 border-l-indigo-500" : "border-l-4 border-l-transparent"
+                      className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors flex items-center space-x-3 ${
+                        selectedFriendId === otherUser._id ? "bg-gray-100" : ""
                       }`}
                     >
-                      <div className="relative">
-                        <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold">
-                          {otherUser.username.charAt(0).toUpperCase()}
-                        </div>
+                      <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold text-lg flex-shrink-0">
+                        {otherUser.username.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline">
-                           <p className="text-sm font-medium text-gray-900 truncate">{otherUser.username}</p>
-                           {chat.updatedAt && (
-                               <span className="text-xs text-gray-400">
-                                   {new Date(chat.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                               </span>
-                           )}
+                          <p className="text-base font-medium text-gray-900 truncate">
+                            {otherUser.username}
+                          </p>
+                          {chat.updatedAt && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              {new Date(chat.updatedAt).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-gray-500 truncate">
-                            {/* We could show last message here if backend provided it clearly, otherwise email */}
-                            {otherUser.email}
+                        <p className="text-sm text-gray-500 truncate mt-0.5">
+                          {chat.lastMessage || "Start chatting!"}
                         </p>
                       </div>
                     </li>
@@ -376,49 +404,44 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
         )}
 
         {/* VIEW: REQUESTS */}
-        {view === 'requests' && (
+        {view === "requests" && (
           <div>
-             <div className="p-3 bg-gray-50 border-b border-gray-100">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Friend Requests ({requests.length})
-              </h3>
-            </div>
-
             {loadingRequests ? (
               <div className="flex justify-center items-center p-8 text-gray-400">
                 <Loader2 className="animate-spin mr-2" /> Loading...
               </div>
             ) : requests.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
+                <UserPlus size={48} className="mx-auto text-gray-300 mb-2" />
                 <p>No pending requests.</p>
               </div>
             ) : (
-              <ul>
+              <ul className="divide-y divide-gray-100">
                 {requests.map((req) => (
-                  <li key={req.id} className="p-4 border-b border-gray-100 hover:bg-gray-50">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-semibold">
-                          {req.username.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{req.username}</p>
-                          <p className="text-xs text-gray-500">{req.email}</p>
-                        </div>
+                  <li key={req.id} className="px-4 py-3 hover:bg-gray-50">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-12 h-12 rounded-full bg-orange-400 flex items-center justify-center text-white font-semibold text-lg">
+                        {req.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-medium text-gray-900">
+                          {req.username}
+                        </p>
+                        <p className="text-sm text-gray-500">{req.email}</p>
                       </div>
                     </div>
-                    <div className="flex space-x-2 mt-2 pl-12">
+                    <div className="flex space-x-2 pl-[60px]">
                       <button
-                        onClick={() => handleRequestResponse(req.id, 'accept')}
-                        className="flex-1 bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md hover:bg-indigo-700 flex items-center justify-center transition-colors"
+                        onClick={() => handleRequestResponse(req.id, "accept")}
+                        className="flex-1 bg-[#25D366] text-white text-sm px-3 py-2 rounded-full hover:bg-[#128C7E] flex items-center justify-center transition-colors font-medium"
                       >
-                        <Check size={14} className="mr-1" /> Accept
+                        <Check size={16} className="mr-1" /> Accept
                       </button>
                       <button
-                        onClick={() => handleRequestResponse(req.id, 'reject')}
-                        className="flex-1 bg-gray-100 text-gray-700 text-xs px-3 py-1.5 rounded-md hover:bg-gray-200 flex items-center justify-center transition-colors"
+                        onClick={() => handleRequestResponse(req.id, "reject")}
+                        className="flex-1 bg-gray-200 text-gray-700 text-sm px-3 py-2 rounded-full hover:bg-gray-300 flex items-center justify-center transition-colors font-medium"
                       >
-                        <X size={14} className="mr-1" /> Decline
+                        <X size={16} className="mr-1" /> Decline
                       </button>
                     </div>
                   </li>
@@ -428,16 +451,69 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
           </div>
         )}
 
+        {/* VIEW: FRIENDS */}
+        {view === "friends" && (
+          <div>
+            {loadingFriends ? (
+              <div className="flex justify-center items-center p-8 text-gray-400">
+                <Loader2 className="animate-spin mr-2" /> Loading...
+              </div>
+            ) : friends.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <User size={48} className="mx-auto text-gray-300 mb-2" />
+                <p>No friends yet.</p>
+                <p className="text-sm mt-2">
+                  Accept requests or search for friends!
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {friends.map((friend) => (
+                  <li
+                    key={friend.id}
+                    onClick={() => {
+                      onSelectFriend({
+                        id: friend.id,
+                        username: friend.username,
+                        email: friend.email,
+                        isOnline: false,
+                      });
+                      setView("chats");
+                    }}
+                    className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center text-white font-semibold text-lg">
+                        {friend.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-medium text-gray-900">
+                          {friend.username}
+                        </p>
+                        <p className="text-sm text-gray-500">{friend.email}</p>
+                      </div>
+                      <MessageSquare size={20} className="text-[#008069]" />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {/* VIEW: SEARCH */}
-        {view === 'search' && (
+        {view === "search" && (
           <div className="flex flex-col h-full">
-            <div className="p-4 border-b border-gray-100 bg-white sticky top-0 z-10">
+            <div className="p-4 border-b border-gray-200 bg-white sticky top-0 z-10">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <Search
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
                 <input
                   type="text"
                   placeholder="Search by username or email..."
-                  className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm border-2 border-gray-200 rounded-full focus:outline-none focus:border-[#25D366] bg-gray-50"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
@@ -456,56 +532,60 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
                 </div>
               ) : !searchQuery ? (
                 <div className="p-8 text-center text-gray-400 text-sm">
-                  <Search size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>Type to find new friends</p>
+                  <Search size={40} className="mx-auto mb-3 opacity-50" />
+                  <p>Search for friends to chat with</p>
                 </div>
               ) : (
-                <ul>
+                <ul className="divide-y divide-gray-100">
                   {searchResults.map((user) => (
-                    <li key={user.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 flex items-center justify-between cursor-default">
+                    <li
+                      key={user.id}
+                      className="px-4 py-3 hover:bg-gray-50 flex items-center justify-between"
+                    >
                       <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-semibold">
+                        <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold text-lg">
                           {user.username.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900 flex items-center">
+                          <p className="text-base font-medium text-gray-900 flex items-center">
                             {user.username}
                             {user.isFriend && (
-                              <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full">
+                              <span className="ml-2 px-2 py-0.5 text-xs bg-[#d9fdd3] text-[#008069] rounded-full font-medium">
                                 Friend
                               </span>
                             )}
                           </p>
-                          <p className="text-xs text-gray-500">{user.email}</p>
+                          <p className="text-sm text-gray-500">{user.email}</p>
                         </div>
                       </div>
-                      
+
                       {user.isFriend ? (
                         <button
                           onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectFriend({
-                                id: user.id,
-                                username: user.username,
-                                email: user.email,
-                                isOnline: user.isOnline
-                              });
+                            e.stopPropagation();
+                            onSelectFriend({
+                              id: user.id,
+                              username: user.username,
+                              email: user.email,
+                              isOnline: user.isOnline,
+                            });
+                            setView("chats");
                           }}
-                          className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-full transition-colors"
+                          className="text-[#008069] hover:bg-[#d9fdd3] p-2.5 rounded-full transition-colors"
                           title="Message Friend"
                         >
-                          <MessageSquare size={20} />
+                          <MessageSquare size={22} />
                         </button>
                       ) : (
                         <button
                           onClick={(e) => {
-                              e.stopPropagation();
-                              sendFriendRequest(user.id);
+                            e.stopPropagation();
+                            sendFriendRequest(user.id);
                           }}
-                          className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-full transition-colors"
+                          className="text-[#008069] hover:bg-[#d9fdd3] p-2.5 rounded-full transition-colors"
                           title="Add Friend"
                         >
-                          <UserPlus size={20} />
+                          <UserPlus size={22} />
                         </button>
                       )}
                     </li>
@@ -515,59 +595,56 @@ export default function Sidebar({ onSelectFriend, selectedFriendId }: SidebarPro
             </div>
           </div>
         )}
-
       </div>
-      
-      {/* Footer / User Profile */}
+
+      {/* Footer / User Profile - WhatsApp style */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         {currentUser ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3 flex-1 min-w-0">
-               <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold shadow-sm">
-                  {currentUser.username.charAt(0).toUpperCase()}
-               </div>
-               
-               {isEditingProfile ? (
-                 <div className="flex-1 flex items-center space-x-2">
-                   <input 
-                      type="text" 
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="w-full text-sm border rounded px-1 py-0.5"
-                   />
-                   <button onClick={handleUpdateProfile} className="text-green-600 hover:text-green-800">
-                     <Save size={16} />
-                   </button>
-                   <button onClick={() => setIsEditingProfile(false)} className="text-gray-500 hover:text-gray-700">
-                     <X size={16} />
-                   </button>
-                 </div>
-               ) : (
-                 <div className="flex-1 min-w-0 group">
-                    <p className="text-sm font-bold text-gray-900 truncate flex items-center">
-                        {currentUser.username}
-                        <button 
-                          onClick={() => setIsEditingProfile(true)}
-                          className="ml-2 text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            <Edit2 size={12} />
-                        </button>
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">Online</p>
-                 </div>
-               )}
+          <div className="flex items-center space-x-3">
+            <div className="w-12 h-12 rounded-full bg-[#008069] flex items-center justify-center text-white font-semibold text-lg shadow-sm">
+              {currentUser.username.charAt(0).toUpperCase()}
             </div>
-            
-            <button 
-              onClick={handleLogout}
-              className="ml-2 p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-              title="Logout"
-            >
-              <LogOut size={18} />
-            </button>
+
+            {isEditingProfile ? (
+              <div className="flex-1 flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="flex-1 text-sm border-2 border-[#25D366] rounded-lg px-2 py-1 focus:outline-none"
+                />
+                <button
+                  onClick={handleUpdateProfile}
+                  className="text-[#25D366] hover:text-[#128C7E]"
+                >
+                  <Save size={18} />
+                </button>
+                <button
+                  onClick={() => setIsEditingProfile(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-semibold text-gray-900 truncate flex items-center">
+                  {currentUser.username}
+                  <button
+                    onClick={() => setIsEditingProfile(true)}
+                    className="ml-2 text-gray-400 hover:text-[#008069]"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                </p>
+                <p className="text-sm text-[#25D366] truncate">● Online</p>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="text-center text-gray-400 text-xs">Loading profile...</div>
+          <div className="text-center text-gray-400 text-sm">
+            Loading profile...
+          </div>
         )}
       </div>
     </div>

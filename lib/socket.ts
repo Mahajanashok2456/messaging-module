@@ -7,6 +7,7 @@ const SOCKET_URL =
 console.log("Connecting to Socket.io server:", SOCKET_URL);
 
 let socket: Socket | null = null;
+let isInitializing = false;
 
 export const getSocket = (): Socket | null => {
   if (typeof window === "undefined") return null;
@@ -16,8 +17,14 @@ export const getSocket = (): Socket | null => {
     return socket;
   }
 
+  // Prevent multiple initialization attempts
+  if (isInitializing) {
+    return socket;
+  }
+
   // Create new socket if none exists
   if (!socket) {
+    isInitializing = true;
     const token = localStorage.getItem("token");
     if (token) {
       socket = io(SOCKET_URL, {
@@ -26,14 +33,16 @@ export const getSocket = (): Socket | null => {
         },
         transports: ["websocket", "polling"],
         reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 10,
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 3000,
+        reconnectionAttempts: 15,
         path: "/socket.io/",
+        forceNew: false,
       });
 
       socket.on("connect", () => {
         console.log("✅ Socket connected:", socket?.id);
+        isInitializing = false;
       });
 
       socket.on("disconnect", (reason) => {
@@ -46,6 +55,7 @@ export const getSocket = (): Socket | null => {
 
       return socket;
     }
+    isInitializing = false;
   }
   return null;
 };

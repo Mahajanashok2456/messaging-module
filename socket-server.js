@@ -78,7 +78,7 @@ io.on("connection", (socket) => {
   });
 
   // Handle sending messages
-  socket.on("send_message", async (data) => {
+  socket.on("send_message", async (data, callback) => {
     try {
       const { messageId, senderId, recipientId, content, timestamp } = data;
 
@@ -90,6 +90,7 @@ io.on("connection", (socket) => {
           recipientId,
           content,
         });
+        if (callback) callback({ error: "Missing required fields" });
         return;
       }
 
@@ -101,9 +102,8 @@ io.on("connection", (socket) => {
         timestamp,
       });
 
-      // Message is already saved by API - just broadcast it
-      // Emit to recipient's room (all their devices)
-      io.to(recipientId).emit("receive_message", {
+      const messageTimestamp = timestamp || new Date().toISOString();
+      const messagePayload = {
         _id: messageId,
         messageId: messageId,
         senderId,
@@ -111,28 +111,33 @@ io.on("connection", (socket) => {
         recipientId,
         recipient: recipientId,
         content,
-        timestamp: timestamp || new Date().toISOString(),
+        timestamp: messageTimestamp,
         status: "delivered",
-      });
+      };
 
-      // Also emit to sender's other devices (except the sending one)
-      socket.to(senderId).emit("receive_message", {
-        _id: messageId,
-        messageId: messageId,
-        senderId,
-        sender: senderId,
-        recipientId,
-        recipient: recipientId,
-        content,
-        timestamp: timestamp || new Date().toISOString(),
-        status: "delivered",
-      });
+      // Message is already saved by API - just broadcast it IMMEDIATELY
+      // Emit to recipient's room (all their devices) - INSTANT
+      io.to(recipientId).emit("receive_message", messagePayload);
+      console.log(`📤 Message sent to recipient room ${recipientId}`);
 
-      console.log(
-        `✅ Message broadcast: ${messageId} to recipient(${recipientId}) and sender's other devices`,
-      );
+      // Also emit to sender's other devices (except the sending one) - INSTANT
+      socket.to(senderId).emit("receive_message", messagePayload);
+      console.log(`📤 Message sent to sender's other devices`);
+
+      // Send immediate acknowledgment back to sender - NO DELAY
+      if (callback) {
+        callback({
+          success: true,
+          messageId: messageId,
+          status: "delivered",
+          timestamp: messageTimestamp,
+        });
+      }
+
+      console.log(`✅ Message ${messageId} delivered instantly to all devices`);
     } catch (error) {
       console.error("Error handling send_message broadcast:", error);
+      if (callback) callback({ error: error.message });
       socket.emit("message_error", { error: error.message });
     }
   });

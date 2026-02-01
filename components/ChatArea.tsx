@@ -278,7 +278,7 @@ export default function ChatArea({
     const messageContent = newMessage.trim();
     const tempId = `temp-${Date.now()}`;
 
-    // Optimistic UI update - add message immediately
+    // Optimistic UI update - add message immediately - ZERO DELAY
     const optimisticMessage: Message = {
       _id: tempId,
       sender: currentUser._id,
@@ -292,18 +292,52 @@ export default function ChatArea({
     setNewMessage("");
     scrollToBottom();
 
-    // Play message sent sound
+    // Play message sent sound immediately
     soundManager.playMessageSent();
 
     try {
-      // Save to database via API
-      const response = await api.post("messages/send", {
+      // Save to database via API - PARALLEL execution
+      const apiPromise = api.post("messages/send", {
         recipientId: selectedFriend.id,
         content: messageContent,
       });
 
+      // Get socket and emit IMMEDIATELY without waiting for API
+      const socket = getSocket();
+      let socketEmitted = false;
+
+      if (socket && socket.connected) {
+        socketEmitted = true;
+        console.log("🚀 Emitting message via socket INSTANTLY (no wait):", {
+          messageId: tempId,
+          senderId: currentUser._id,
+          recipientId: selectedFriend.id,
+          content: messageContent,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Emit with callback for acknowledgment
+        socket.emit(
+          "send_message",
+          {
+            messageId: tempId,
+            senderId: currentUser._id,
+            recipientId: selectedFriend.id,
+            content: messageContent,
+            timestamp: new Date().toISOString(),
+          },
+          (response: any) => {
+            if (response?.success) {
+              console.log("✅ Socket acknowledged message delivery");
+            }
+          },
+        );
+      }
+
+      // Now wait for API response to get real message ID
+      const response = await apiPromise;
       const savedMessage = response.data;
-      console.log("Message saved, server response:", savedMessage);
+      console.log("💾 Message saved to database:", savedMessage._id);
 
       // Update the temporary message with real data from server
       setMessages((prev) =>
@@ -315,35 +349,37 @@ export default function ChatArea({
                 recipient: savedMessage.recipient,
                 content: savedMessage.content,
                 timestamp: savedMessage.timestamp,
-                status: "sent",
+                status: socketEmitted ? "delivered" : "sent",
               }
             : msg,
         ),
       );
 
-      // Send real-time notification via Socket.IO
-      const socket = getSocket();
-      if (socket) {
-        console.log("Emitting send_message via socket with:", {
-          messageId: savedMessage._id,
-          senderId: currentUser._id,
-          recipientId: selectedFriend.id,
-          content: messageContent,
-          timestamp: savedMessage.timestamp,
-        });
+      // If socket wasn't available before, send now with real ID
+      if (!socketEmitted) {
+        const socket = getSocket();
+        if (socket && socket.connected) {
+          console.log("Emitting send_message via socket with real ID:", {
+            messageId: savedMessage._id,
+            senderId: currentUser._id,
+            recipientId: selectedFriend.id,
+            content: messageContent,
+            timestamp: savedMessage.timestamp,
+          });
 
-        socket.emit("send_message", {
-          messageId: savedMessage._id,
-          senderId: currentUser._id,
-          recipientId: selectedFriend.id,
-          content: messageContent,
-          timestamp: savedMessage.timestamp,
-        });
-      } else {
-        console.warn("Socket not available, message sent via API only");
+          socket.emit("send_message", {
+            messageId: savedMessage._id,
+            senderId: currentUser._id,
+            recipientId: selectedFriend.id,
+            content: messageContent,
+            timestamp: savedMessage.timestamp,
+          });
+        } else {
+          console.warn("Socket not available, message sent via API only");
+        }
       }
     } catch (error: any) {
-      console.error("Failed to send message", error);
+      console.error("❌ Failed to send message", error);
 
       // Remove optimistic message on error
       setMessages((prev) => prev.filter((msg) => msg._id !== tempId));

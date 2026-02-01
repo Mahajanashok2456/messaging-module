@@ -81,6 +81,13 @@ io.on("connection", (socket) => {
   socket.on("send_message", async (data) => {
     try {
       const { messageId, senderId, recipientId, content, timestamp } = data;
+      
+      // Validate required fields
+      if (!senderId || !recipientId || !content) {
+        console.error("Missing required fields:", { senderId, recipientId, content });
+        return;
+      }
+
       console.log("Message received via socket:", {
         messageId,
         senderId,
@@ -91,13 +98,14 @@ io.on("connection", (socket) => {
 
       // Save message to database
       const newMessage = new Message({
-        sender: senderId,
-        recipient: recipientId,
+        sender: mongoose.Types.ObjectId(senderId),
+        recipient: mongoose.Types.ObjectId(recipientId),
         content,
         timestamp: new Date(timestamp),
       });
 
       await newMessage.save();
+      console.log(`✅ Message saved: ${newMessage._id}`);
 
       // Update or create chat for sender
       await Chat.findOneAndUpdate(

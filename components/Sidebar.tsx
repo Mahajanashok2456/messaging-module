@@ -138,7 +138,7 @@ export default function Sidebar({
 
   const fetchCurrentUser = async () => {
     try {
-      const response = await api.get("/api/auth/profile");
+      const response = await api.get("auth/profile");
       setCurrentUser(response.data.data.user);
       setNewName(response.data.data.user.username);
     } catch (error) {
@@ -150,7 +150,7 @@ export default function Sidebar({
     setLoadingChats(true);
     try {
       // Fetch active chats sorted by updatedAt
-      const response = await api.get("/api/users/me/chats");
+      const response = await api.get("users/me/chats");
       // Deduplicate chats by chat ID
       const uniqueChats = Array.from(
         new Map(
@@ -168,7 +168,7 @@ export default function Sidebar({
   const fetchFriends = async () => {
     setLoadingFriends(true);
     try {
-      const response = await api.get("/api/friends/list");
+      const response = await api.get("friends/list");
       setFriends(response.data);
     } catch (error) {
       console.error("Failed to fetch friends", error);
@@ -180,7 +180,7 @@ export default function Sidebar({
   const fetchRequests = async () => {
     setLoadingRequests(true);
     try {
-      const response = await api.get("/api/friends/requests");
+      const response = await api.get("friends/requests");
       setRequests(response.data);
     } catch (error) {
       console.error("Failed to fetch requests", error);
@@ -205,7 +205,7 @@ export default function Sidebar({
 
   const sendFriendRequest = async (userId: string) => {
     try {
-      await api.post("/api/friends/request", { recipientId: userId });
+      await api.post("friends/request", { recipientId: userId });
       setSearchResults((prev) => prev.filter((user) => user.id !== userId));
       alert("Friend request sent!");
     } catch (error: any) {

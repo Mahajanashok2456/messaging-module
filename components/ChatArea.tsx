@@ -117,7 +117,7 @@ export default function ChatArea({
   const joinChat = async () => {
     // Create or get chat session
     try {
-      await api.post("/api/chats/get-or-create", {
+      await api.post("chats/get-or-create", {
         otherUserId: selectedFriend.id,
       });
     } catch (e) {
@@ -153,7 +153,7 @@ export default function ChatArea({
 
     try {
       // Save to database via API
-      const response = await api.post("/api/messages/send", {
+      const response = await api.post("messages/send", {
         recipientId: selectedFriend.id,
         content: messageContent,
       });

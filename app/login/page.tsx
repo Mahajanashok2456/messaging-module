@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await api.post("/api/auth/login", { email, password });
+      const response = await api.post("auth/login", { email, password });
 
       // API returns: { status: "success", data: { user: {...}, accessToken: "..." } }
       const { data } = response.data;

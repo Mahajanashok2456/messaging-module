@@ -156,7 +156,7 @@ export default function Sidebar({
         new Map(
           (response.data || []).map((chat: Chat) => [chat._id, chat]),
         ).values(),
-      );
+      ) as Chat[];
       setChats(uniqueChats);
     } catch (error) {
       console.error("Failed to fetch chats", error);

@@ -13,7 +13,7 @@ app.prepare().then(() => {
 
   const io = new Server(server, {
     cors: {
-      origin: ["http://localhost:3000", "http://localhost:5000"],
+      origin: process.env.SOCKET_CORS_ORIGIN || "*",
       methods: ["GET", "POST"],
       credentials: true,
     },

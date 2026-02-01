@@ -80,12 +80,14 @@ export default function ChatArea({
   // Mark received messages as read
   useEffect(() => {
     const markMessagesAsRead = async () => {
-      const unreadMessages = messages.filter(
-        (msg) =>
+      // Only mark received messages (where currentUser is recipient) as read
+      const unreadMessages = messages.filter((msg) => {
+        const recipientId =
           typeof msg.recipient === "string"
-            ? msg.recipient === currentUser._id
-            : msg.recipient._id === currentUser._id && msg.status !== "read",
-      );
+            ? msg.recipient
+            : msg.recipient._id;
+        return recipientId === currentUser._id && msg.status !== "read";
+      });
 
       if (unreadMessages.length > 0) {
         try {
@@ -160,6 +162,7 @@ export default function ChatArea({
               recipient: recipientId,
               content: message.content,
               timestamp: message.timestamp || new Date().toISOString(),
+              status: "delivered",
             },
           ];
         });
@@ -247,6 +250,7 @@ export default function ChatArea({
       recipient: selectedFriend.id,
       content: messageContent,
       timestamp: new Date().toISOString(),
+      status: "sent",
     };
 
     setMessages((prev) => [...prev, optimisticMessage]);
@@ -275,6 +279,7 @@ export default function ChatArea({
                 recipient: savedMessage.recipient,
                 content: savedMessage.content,
                 timestamp: savedMessage.timestamp,
+                status: savedMessage.status || "sent",
               }
             : msg,
         ),

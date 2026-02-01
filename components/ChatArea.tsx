@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import api from "@/lib/api";
 import { getSocket } from "@/lib/socket";
-import { Send } from "lucide-react";
+import { Send, ArrowLeft } from "lucide-react";
 
 interface Friend {
   id: string;
@@ -22,11 +22,13 @@ interface Message {
 interface ChatAreaProps {
   selectedFriend: Friend;
   currentUser: any;
+  onBack?: () => void;
 }
 
 export default function ChatArea({
   selectedFriend,
   currentUser,
+  onBack,
 }: ChatAreaProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -218,6 +220,17 @@ export default function ChatArea({
     <div className="flex-1 flex flex-col h-full bg-[#e5ddd5] min-w-0">
       {/* WhatsApp-style Header */}
       <div className="bg-[#f0f2f5] border-b border-gray-300 flex items-center px-3 md:px-4 py-2 md:py-3 shadow-sm">
+        {/* Back button - visible on mobile only */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden mr-2 p-1 hover:bg-gray-200 rounded-full transition-colors"
+            title="Go back"
+          >
+            <ArrowLeft size={20} className="text-gray-700" />
+          </button>
+        )}
+        
         <div className="w-8 md:w-10 h-8 md:h-10 rounded-full bg-gray-300 flex items-center justify-center text-white font-semibold mr-2 md:mr-3 flex-shrink-0">
           {selectedFriend.username.charAt(0).toUpperCase()}
         </div>
